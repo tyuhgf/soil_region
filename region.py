@@ -1,15 +1,10 @@
 import tkinter as tk
-import tkinter.filedialog as tk_filedialog
 from tkinter import ttk
-import numpy as np
 from PIL import Image
-from scipy import misc
 import matplotlib.pyplot as plt
 
-import utils
-from utils import RegionImage, NamedFrame, N_REGIONS
+from utils import RegionImage, NamedFrame, N_REGIONS, TMP_FOLDER
 
-from segcanvas.canvas import CanvasImage
 from segcanvas.wrappers import FocusLabelFrame
 
 
@@ -17,6 +12,8 @@ class RegionWindow:
     def __init__(self, map_window, hist):
         self.app = map_window.app
         self.root = tk.Toplevel(self.app)
+        self.root.title('Region')
+        self.root.geometry("%dx%d%+d%+d" % (700, 1000, 500, 100))
         self.map_window = map_window
         self.hist = hist
 
@@ -24,7 +21,6 @@ class RegionWindow:
 
         self._add_top_menu()
         self._add_tabs()
-        self._add_left_menu()
         self._calc_base_image(hist[0])
         self._add_canvas_frame()
         self.canvas_image.reload_image(self.base_image)
@@ -42,7 +38,6 @@ class RegionWindow:
         self.save_btn = tk.Button(self.top_menu, text='Save\nRegion')
         self.quit_btn = tk.Button(self.top_menu, text='Quit')
         self.to_map_btn = tk.Button(self.top_menu, text='Update\nMap')
-        # todo: reconfigure button & _reconfigure method
 
         self.load_btn.bind("<Button-1>", self._load_file)
         self.save_btn.bind("<Button-1>", self.save_file)
@@ -55,8 +50,8 @@ class RegionWindow:
         self.to_map_btn.place(x=-50, y=10, relx=1, width=40, height=40)
 
     def _calc_base_image(self, array):
-        plt.imsave('C:\\Temp\\qwe.png', array, cmap='gnuplot2')
-        self.base_image = Image.open('C:\\Temp\\qwe.png').convert('RGB')
+        plt.imsave(TMP_FOLDER + 'qwe.png', array.transpose()[::-1, :], cmap='gnuplot2')
+        self.base_image = Image.open(TMP_FOLDER + 'qwe.png').convert('RGB')
 
     def _add_canvas_frame(self):
         canvas_frame = FocusLabelFrame(self.root)
@@ -70,13 +65,10 @@ class RegionWindow:
         self.canvas_image = RegionImage(self.canvas_frame, self.canvas, self)
         # self.canvas_image.register_click_callback(self._click_callback)
 
-    def _click_callback(self, is_positive, x, y):
-        if not is_positive:  # right button
-            return
-        print(x, y)
-
-    def _add_left_menu(self):
-        pass
+    # def _click_callback(self, is_positive, x, y):
+    #     if not is_positive:  # right button
+    #         return
+    #     print(x, y)
 
     def _add_tabs(self):
         self.tab_parent = ttk.Notebook(self.root)
@@ -115,6 +107,7 @@ class RegionWindow:
         self.canvas_image.mask.update_array(self.canvas_image.rasters[0])
         self.map_window.map_image.mask = self.canvas_image.mask
         self.map_window.map_image.create_filtered_image()
+        self.map_window.redraw()
         pass  # todo
 
     def mode_add_polygon(self, ev):

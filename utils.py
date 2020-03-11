@@ -1,80 +1,15 @@
-import os
-import random
 import numpy as np
-from tkinter import *
-from PIL import ImageTk, Image
-from tkinter import filedialog, ttk
-from skimage import io, color
+from tkinter import ttk
 from skimage.draw import polygon
 from scipy import misc
 from segcanvas.canvas import CanvasImage
+import sys
+
 
 COLORS = np.array([[0, 0, 0], [255, 0, 0], [0, 255, 0], [0, 0, 255], [0, 255, 255], [255, 0, 255], [255, 255, 0]])
 N_REGIONS = 5
 
-
-class MapImage:
-    channels = ['blue', 'green', 'red', 'nir', 'swir1', '06', 'swir2']
-    chan_dict = {str(i + 1).zfill(2): c for i, c in enumerate(channels)}
-
-    def __init__(self):
-        self.bands = {b: None for b in self.channels}
-        self.mask = None
-        self.original_image = None
-        self.original_array = None
-        self.filtered_image = None
-
-    def load_band(self, b, img_path):
-        try:
-            self.bands[b] = np.array(Image.open(img_path))
-        except FileNotFoundError:
-            pass
-
-    def load(self, img_path):
-        img_name = self._get_img_name(img_path)
-        if img_name != '':
-            for n, c in self.chan_dict.items():
-                self.load_band(c, f'{img_name}_{c}_{n}.tif')
-
-    def create_original_img(self, b):
-        arrays = [self.bands[self.chan_dict[c]] for c in b]
-        if len(arrays) == 1:
-            arrays *= 3
-        if len(arrays) == 2:
-            arrays += [np.zeros_like(arrays[0])]
-        assert len(arrays) == 3
-        self.original_image = misc.toimage(np.array(arrays))  # [:, ::-1, :] todo
-        # Image.fromarray(np.array(arrays).transpose([1,2,0]), mode='RGB') ???
-        self.original_array = np.array(self.original_image)
-
-    def create_filtered_image(self):
-        arrays = [self.bands[self.chan_dict[c]] for c in self.mask.channels]
-
-        types = self.mask.get_value(*tuple(arrays))
-        filtered_image_array = self.original_array * 0.5 + get_color(types) * 0.5
-        self.filtered_image = misc.toimage(filtered_image_array, cmin=0, cmax=255)
-
-    @classmethod
-    def _get_img_name(cls, img_path):
-        if not img_path.endswith('.tif'):
-            return ''
-        img_path = img_path[:-4]
-        for n, c in cls.chan_dict.items():
-            if img_path.endswith(f'_{c}_{n}'):
-                return img_path[:-2 - len(c) - len(n)]
-        return ''
-
-
-class _RegionImage:
-    def __init__(self, base_image):
-        self.base_image = base_image
-        self.base_array = np.array(self.base_image)
-        self.crafted_array = np.zeros(self.base_array.shape[:2], dtype=int)
-        self._create_crafted_image()
-
-    def _create_crafted_image(self):
-        crafted_image_array = self.base_array * 0.5 + get_color(self.crafted_array) * 0.5
-        self.crafted_image = misc.toimage(crafted_image_array, cmin=0, cmax=255)
+TMP_FOLDER = '/tmp/' if sys.platform == 'linux' else 'C:\\Temp\\'
 
 
 class Mask:
@@ -130,13 +65,12 @@ class RegionImage(CanvasImage):
     def __init__(self, canvas_frame, canvas, region_window):
         super().__init__(canvas_frame, canvas)
         self.canvas.bind('<Button-1>', self.__left_mouse_button_pressed)  # move vertex or subdivide edge
-        self.canvas.bind('<Double-Button-1>', self.__left_mouse_double_click)  # todo delete vertex or polygon
-        # todo https://codereview.stackexchange.com/questions/198056/on-click-doubleclick-and-mouse-moving
+        self.canvas.bind('<Double-Button-1>', self.__left_mouse_double_click)  # delete vertex or polygon
         self.canvas.bind('<B1-Motion>', self.__left_mouse_moving)  # move vertex or subdivide edge
         self.canvas.bind('<ButtonRelease-1>', self.__left_mouse_button_released)  # move vertex or subdivide edge
         self.region_window = region_window
         self.base_image = region_window.base_image
-        self.base_array = np.array(self.base_image)
+        self.base_array = np.array(self.base_image).transpose([1, 0, 2])
 
         self.tab = None
         self.mode = 'DEFAULT'
@@ -154,15 +88,16 @@ class RegionImage(CanvasImage):
         self.mode_default(None)
         self.update_raster(n)
         self._create_crafted_image(n)
-        # self.region_window.on_ctrl(None)
+        self.__show_image()
+        self.region_window.redraw(None)
 
     def update_raster(self, n):
         self.rasters[n] = np.zeros(self.region_window.shape, dtype=int)
         if n > 0:
             for p in self.polygons[n]:
                 p = np.array(p)
-                rr, cc = polygon(p[:, 0], p[:, 1], self.region_window.shape)
-                self.rasters[n][rr, cc] = 1
+                rr, cc = polygon(p[:, 1], p[:, 0], self.region_window.shape)
+                self.rasters[n][rr, self.region_window.shape[1] - cc] = 1
         if n == 0:
             for m in range(1, N_REGIONS + 1):
                 self.rasters[0][self.rasters[m] > 0] = m
@@ -179,8 +114,9 @@ class RegionImage(CanvasImage):
                                          [(x + x_) // 2, (y + y_) // 2, n, k, i, 'edge']]
 
     def _create_crafted_image(self, n):
-        crafted_image_array = self.base_array * 0.5 + get_color(self.rasters[n]) * 0.5
-        self.crafted_image = misc.toimage(crafted_image_array, cmin=0, cmax=255)
+        raster = self.rasters[n][:, ::-1]
+        crafted_image_array = self.base_array * 0.5 + get_color(raster) * 0.5
+        self.crafted_image = misc.toimage(crafted_image_array.transpose(1, 0, 2), cmin=0, cmax=255)
 
     def mode_add_polygon(self, _ev):
         if self.tab > 0:
@@ -214,7 +150,6 @@ class RegionImage(CanvasImage):
         coords = self._get_click_coordinates(event)
         if coords is None:
             return
-        coords = [coords[1], coords[0]]
         ev = self._last_lb_click_event
 
         if self.mode == 'DEFAULT':
@@ -224,7 +159,7 @@ class RegionImage(CanvasImage):
                 if type_ == 'vertex':
                     self.polygons[n][k][i] = coords
                 if type_ == 'edge':
-                    self.polygons[n][k].insert(i + 1, coords)
+                    self.polygons[n][k].insert(i + 1, list(coords))
                     self._last_lb_click_event = [coords[0], coords[1], n, k, i + 1, 'vertex']
 
         elif self.mode == 'ADD':
@@ -241,7 +176,6 @@ class RegionImage(CanvasImage):
         coords = self._get_click_coordinates(event)
         if coords is None:
             return
-        coords = [coords[1], coords[0]]
 
         if self.mode == 'DEFAULT':
             if self.tab is not None and self.tab > 0:
@@ -259,7 +193,6 @@ class RegionImage(CanvasImage):
         coords = self._get_click_coordinates(event)
 
         if coords is not None and self.tab is not None and self.tab > 0:
-            coords = [coords[1], coords[0]]
             nearest = self._find_nearest(self.tab, coords)
             if nearest is not None:
                 n, k, i, type_ = tuple(nearest[2:])
@@ -284,6 +217,12 @@ class RegionImage(CanvasImage):
         if (p[0] - coords[0]) ** 2 + (p[1] - coords[1]) ** 2 > 5 ** 2:
             return None
         return self.movables[n][i]
+
+    def _get_click_coordinates(self, event):
+        res = super()._get_click_coordinates(event)
+        if res is not None:
+            return res[1], res[0]
+        return None
 
     def __show_image(self):
         # noinspection PyUnresolvedReferences, PyProtectedMember
@@ -340,3 +279,20 @@ class RegionImage(CanvasImage):
         array = self.rasters[0]
         self.mask = Mask(x_min, x_max, x_step, y_min, y_max, y_step, array, channels)
         pass
+
+
+def string_to_value(s, dtype='int_to_str', logger=None):
+    try:
+        if dtype == 'int_to_str':
+            n = int(s)
+            if not 0 < n < 8:
+                raise ValueError('Unknown Channel')
+            return str(n).zfill(2)
+        elif dtype == 'float':
+            return float(s)
+        elif dtype == 'int':
+            return int(s)
+    except Exception as e:
+        if logger is not None:
+            logger.log(e)
+        return None

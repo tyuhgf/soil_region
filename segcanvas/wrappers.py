@@ -4,7 +4,7 @@ from tkinter import messagebox, ttk
 
 class BoundedNumericalEntry(tk.Entry):
     def __init__(self, master=None, min_value=None, max_value=None, variable=None,
-                 vartype=float, width=7, allow_inf=False,  **kwargs):
+                 vartype=float, width=7, allow_inf=False, **kwargs):
         if variable is None:
             if vartype == float:
                 self.var = tk.DoubleVar()
@@ -51,7 +51,7 @@ class BoundedNumericalEntry(tk.Entry):
         mn = '-inf' if self.min_value is None else str(self.min_value)
         mx = '+inf' if self.max_value is None else str(self.max_value)
         messagebox.showwarning("Incorrect value in input field", f"Value for {self._name} should be in "
-                               f"[{mn}; {mx}] and of type {self.vartype.__name__}")
+                                                                 f"[{mn}; {mx}] and of type {self.vartype.__name__}")
 
         return False
 
@@ -84,9 +84,9 @@ class FocusLabelFrame(ttk.LabelFrame):
         self.bind("<1>", lambda event: self.focus_set())
 
     def set_frame_state(self, state):
-        def set_widget_state(widget, state):
+        def set_widget_state(widget, state_):
             if widget.winfo_children is not None:
                 for w in widget.winfo_children():
-                    w.configure(state=state)
+                    w.configure(state=state_)
 
         set_widget_state(self, state)
