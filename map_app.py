@@ -16,7 +16,7 @@ class MapWindow:
     def __init__(self, app):
         self.app = app
         self.root = app
-        self.root.title('Preview')
+        self.root.title('Map')
         self.root.geometry("%dx%d%+d%+d" % (700, 700, 100, 100))
 
         self.channels_img = ['07', '04', '02']
@@ -82,21 +82,25 @@ class MapWindow:
             self.canvas_image.reload_image(self.map_image.original_image, True)
 
     def _load_file(self, _ev):
-        img_path = tk_filedialog.Open(self.root, filetypes=[('', '*.*')]).show()
+        img_path = tk_filedialog.Open(self.root, filetypes=[('*.tif files', '*.tif')]).show()
         if img_path != '':
             if hasattr(self, 'canvas_image'):
                 pass  # todo remove self.canvas_image data from memory
             self.map_image.load(img_path)
             self.map_image.create_original_img(self.channels_img)
-            # self.map_image.mask = utils.get_default_mask(self.map_image)  # todo delete
-            # self.map_image.create_filtered_image()
             self.canvas_image.reload_image(self.map_image.original_image, True)
 
-    def save_file(self, ev):
-        pass  # todo
-        # fn = tk_filedialog.SaveAs(self.root, filetypes=[('*.txt files', '.txt')]).show()
-        # if fn == '':
-        #     return
+    def save_file(self, _ev):
+        fn = tk_filedialog.SaveAs(self.root, filetypes=[('*.tif files', '*.tif')]).show()
+        if fn == '':
+            return
+        if not fn.endswith('.tif'):
+            fn += '.tif'
+        arrays = [self.map_image.bands[self.map_image.chan_dict[c]] for c in self.map_image.mask.channels]
+        # todo revisit logic create_filtered_image
+        types = self.map_image.mask.get_value(*tuple(arrays))
+        colors = get_color(types)
+        misc.toimage(colors, cmin=0, cmax=255).save(fn)
 
     def on_ctrl(self, _arg):
         if self.map_image.original_image is not None:

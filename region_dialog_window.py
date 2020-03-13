@@ -1,12 +1,10 @@
 import tkinter as tk
 import numpy as np
-from PIL import Image
-import matplotlib.pyplot as plt
 
 from region import RegionWindow
 from segcanvas.canvas import CanvasImage
 from segcanvas.wrappers import FocusLabelFrame
-from utils import TMP_FOLDER, string_to_value
+from utils import string_to_value, plot_hist
 
 
 class RegionDialogWindow:
@@ -120,10 +118,7 @@ class RegionDialogWindow:
                                    bins=self.steps,
                                    range=[self.x_range, self.y_range])
 
-        array = self.hist[0]
-        array[0][0] = 0  # todo
-        plt.imsave(TMP_FOLDER + 'qwe.png', array.transpose()[::-1, :], cmap='gnuplot2')
-        self.base_image = Image.open(TMP_FOLDER + 'qwe.png').convert('RGB')
+        self.base_image = plot_hist(self.hist[0])
 
         self.canvas_image.reload_image(self.base_image)
 
@@ -135,7 +130,7 @@ class RegionDialogWindow:
         for i in range(2):
             self.channels_region[i] = string_to_value(self.ch_entries[i].get(), 'int_to_str') or self.channels_region[i]
             self.ch_entries[i].delete(0, 'end')
-            self.ch_entries[i].insert(0, self.channels_region[i])
+            self.ch_entries[i].insert(0, int(self.channels_region[i]))
 
         self._calc_ranges()
         self._reload_hist()

@@ -2,6 +2,8 @@ import numpy as np
 from tkinter import ttk
 from skimage.draw import polygon
 from scipy import misc
+from PIL import Image
+import matplotlib.pyplot as plt
 from segcanvas.canvas import CanvasImage
 import sys
 
@@ -23,34 +25,17 @@ class Mask:
         self.array = array
         self.channels = channels
 
-        self._vec_get_value()
-
-    def _vec_get_value(self):
-        @np.vectorize
-        def f(x, y):
-            x_ = min(int((x - self.x_min) // self.x_step), self.array.shape[0] - 1)
-            y_ = min(int((y - self.y_min) // self.y_step), self.array.shape[1] - 1)
-            return self.array[x_][y_]
-
-        self.get_value = f
+    def get_value(self, x, y):
+        x_ = np.maximum(np.minimum(((x - self.x_min) // self.x_step).astype(int), self.array.shape[0] - 1), 0)
+        y_ = np.maximum(np.minimum(((y - self.y_min) // self.y_step).astype(int), self.array.shape[1] - 1), 0)
+        return self.array.flatten()[x_ * self.array.shape[1] + y_]
 
     def update_array(self, array):
         self.array = array
-        self._vec_get_value()
 
 
 def get_color(t):
     return np.array([COLORS.transpose()[i].take(t) for i in range(3)]).transpose((1, 2, 0))
-
-
-# def get_default_mask(map_image):
-#     b = ['03', '04']
-#     arrays = [map_image.bands[map_image.chan_dict[c]] for c in b]
-#     params = [[arr.min(), arr.max(), (arr.max() - arr.min()) / 256] for arr in arrays]
-#
-#     mask_array = np.zeros([256, 256], dtype=int)
-#
-#     return Mask(*tuple(params[0]), *tuple(params[1]), mask_array, b)
 
 
 class NamedFrame(ttk.Frame):
@@ -96,8 +81,8 @@ class RegionImage(CanvasImage):
         if n > 0:
             for p in self.polygons[n]:
                 p = np.array(p)
-                rr, cc = polygon(p[:, 1], p[:, 0], self.region_window.shape)
-                self.rasters[n][rr, self.region_window.shape[1] - cc] = 1
+                rr, cc = polygon(p[:, 0], p[:, 1], self.region_window.shape)
+                self.rasters[n][rr, cc] = 1
         if n == 0:
             for m in range(1, N_REGIONS + 1):
                 self.rasters[0][self.rasters[m] > 0] = m
@@ -131,18 +116,14 @@ class RegionImage(CanvasImage):
             self.update_raster(self.tab)
             self._create_crafted_image(self.tab)
 
-            self.__show_image()
+            self.patch_image(self.crafted_image)
 
     def __left_mouse_button_released(self, event):
-        print('__left_mouse_button_released', self.__double_click_flag)
-
         if self.__double_click_flag:
             return
         self.region_window.root.after(300, self.__left_mouse_moving, event)
 
     def __left_mouse_moving(self, event):
-        print('__left_mouse_moving', self.__double_click_flag)
-
         if self.__double_click_flag:
             self.__double_click_flag = False
             return
@@ -157,37 +138,34 @@ class RegionImage(CanvasImage):
                 _coords_old = [ev[0], ev[1]]
                 n, k, i, type_ = tuple(ev[2:])
                 if type_ == 'vertex':
-                    self.polygons[n][k][i] = coords
+                    self.polygons[n][k][i] = [coords[0], coords[1]]
                 if type_ == 'edge':
-                    self.polygons[n][k].insert(i + 1, list(coords))
+                    self.polygons[n][k].insert(i + 1, [coords[0], coords[1]])
                     self._last_lb_click_event = [coords[0], coords[1], n, k, i + 1, 'vertex']
 
         elif self.mode == 'ADD':
-            self.polygons[self.tab][-1][-1] = coords
+            self.polygons[self.tab][-1][-1] = [coords[0], coords[1]]
 
         self.update_movables(self.tab)
         self.update_raster(self.tab)
         self._create_crafted_image(self.tab)
-        self.__show_image()
+        self.patch_image(self.crafted_image)
 
     def __left_mouse_button_pressed(self, event):
-        print('__left_mouse_button_pressed', self.__double_click_flag)
-
         coords = self._get_click_coordinates(event)
         if coords is None:
             return
 
         if self.mode == 'DEFAULT':
             if self.tab is not None and self.tab > 0:
-                self._last_lb_click_event = self._find_nearest(self.tab, coords)
+                self._last_lb_click_event = self._find_nearest(self.tab,
+                                                               [coords[0], coords[1]])
         elif self.tab > 0 and self.mode == 'ADD':
-            self.polygons[self.tab][-1].append(coords)
+            self.polygons[self.tab][-1].append([coords[0], coords[1]])
 
         self.__show_image()
 
     def __left_mouse_double_click(self, event):
-        print('__left_mouse_double_click', self.__double_click_flag)
-
         self.__double_click_flag = True
 
         coords = self._get_click_coordinates(event)
@@ -206,7 +184,7 @@ class RegionImage(CanvasImage):
         self.update_movables(self.tab)
         self.update_raster(self.tab)
         self._create_crafted_image(self.tab)
-        self.__show_image()
+        self.patch_image(self.crafted_image)
 
     def _find_nearest(self, n, coords):
         if len(self.movables[n]) == 0:
@@ -221,7 +199,7 @@ class RegionImage(CanvasImage):
     def _get_click_coordinates(self, event):
         res = super()._get_click_coordinates(event)
         if res is not None:
-            return res[1], res[0]
+            return res[0], self.region_window.shape[1] - res[1]
         return None
 
     def __show_image(self):
@@ -233,7 +211,7 @@ class RegionImage(CanvasImage):
         for p in self.polygons[self.tab]:
             for i in range(len(p)):
                 x, y = tuple(p[i])
-                x, y = y, x
+                y = self.region_window.shape[1] - y
 
                 x *= self.real_scale[0]
                 y *= self.real_scale[1]
@@ -242,7 +220,7 @@ class RegionImage(CanvasImage):
                 y += box_image[1]
 
                 x_, y_ = tuple(p[(i + 1) % len(p)])
-                x_, y_ = y_, x_
+                y_ = self.region_window.shape[1] - y_
 
                 x_ *= self.real_scale[0]
                 y_ *= self.real_scale[1]
@@ -256,7 +234,7 @@ class RegionImage(CanvasImage):
         for p in self.polygons[self.tab]:
             for i in range(len(p)):
                 x, y = tuple(p[i])
-                x, y = y, x
+                y = self.region_window.shape[1] - y
 
                 x *= self.real_scale[0]
                 y *= self.real_scale[1]
@@ -296,3 +274,13 @@ def string_to_value(s, dtype='int_to_str', logger=None):
         if logger is not None:
             logger.log(e)
         return None
+
+
+def plot_hist(hist):
+    array = hist
+    array[0][:] = 0
+    array[:][0] = 0
+    array = array ** .3 + 10
+
+    plt.imsave(TMP_FOLDER + 'qwe.png', array.transpose()[::-1, :], cmap='gnuplot2')
+    return Image.open(TMP_FOLDER + 'qwe.png').convert('RGB')

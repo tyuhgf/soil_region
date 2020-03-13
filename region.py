@@ -1,9 +1,9 @@
+import json
 import tkinter as tk
 from tkinter import ttk
-from PIL import Image
-import matplotlib.pyplot as plt
+import tkinter.filedialog as tk_filedialog
 
-from utils import RegionImage, NamedFrame, N_REGIONS, TMP_FOLDER
+from utils import RegionImage, NamedFrame, N_REGIONS, plot_hist
 
 from segcanvas.wrappers import FocusLabelFrame
 
@@ -13,7 +13,7 @@ class RegionWindow:
         self.app = map_window.app
         self.root = tk.Toplevel(self.app)
         self.root.title('Region')
-        self.root.geometry("%dx%d%+d%+d" % (700, 1000, 500, 100))
+        self.root.geometry("%dx%d%+d%+d" % (600, 600, 500, 100))
         self.map_window = map_window
         self.hist = hist
 
@@ -21,7 +21,7 @@ class RegionWindow:
 
         self._add_top_menu()
         self._add_tabs()
-        self._calc_base_image(hist[0])
+        self.base_image = plot_hist(hist[0])
         self._add_canvas_frame()
         self.canvas_image.reload_image(self.base_image)
 
@@ -49,10 +49,6 @@ class RegionWindow:
         self.quit_btn.place(x=110, y=10, width=40, height=40)
         self.to_map_btn.place(x=-50, y=10, relx=1, width=40, height=40)
 
-    def _calc_base_image(self, array):
-        plt.imsave(TMP_FOLDER + 'qwe.png', array.transpose()[::-1, :], cmap='gnuplot2')
-        self.base_image = Image.open(TMP_FOLDER + 'qwe.png').convert('RGB')
-
     def _add_canvas_frame(self):
         canvas_frame = FocusLabelFrame(self.root)
         canvas_frame.rowconfigure(0, weight=1)
@@ -63,12 +59,6 @@ class RegionWindow:
         self.canvas = canvas
         self.canvas_frame = canvas_frame
         self.canvas_image = RegionImage(self.canvas_frame, self.canvas, self)
-        # self.canvas_image.register_click_callback(self._click_callback)
-
-    # def _click_callback(self, is_positive, x, y):
-    #     if not is_positive:  # right button
-    #         return
-    #     print(x, y)
 
     def _add_tabs(self):
         self.tab_parent = ttk.Notebook(self.root)
@@ -86,13 +76,55 @@ class RegionWindow:
             self.canvas_image.to_tab(ev.widget.number)
 
     def quit(self, _ev):
-        self.root.destroy()  # todo delete images
+        delattr(self.map_window, 'region_window')
+        self.map_window.map_image.filtered_image = None
+        self.root.destroy()
+        del self
 
     def _load_file(self, _ev):
-        pass  # todo
+        load_path = tk_filedialog.Open(self.root, filetypes=[('', '*.json')]).show()
+        if load_path == '':
+            return
+        x_min, x_max = self.hist[1][0], self.hist[1][-1]
+        x_step = self.hist[1][1] - self.hist[1][0]
+        y_min, y_max = self.hist[2][0], self.hist[2][-1]
+        y_step = self.hist[2][1] - self.hist[2][0]
+        channels = self.map_window.channels_region
 
-    def save_file(self, ev):
-        pass  # todo
+        q = json.load(open(load_path, 'r'))
+        if q['channels'] != channels:
+            return  # todo message box
+        for channel_polygons in q['polygons']:
+            for p in channel_polygons:
+                for v in p:
+                    v[0] = min(max(int((q['x_min'] + v[0] * q['x_step'] - x_min) / x_step), 0), self.shape[0] - 1)
+                    v[1] = min(max(int((q['y_min'] + v[1] * q['y_step'] - y_min) / y_step), 0), self.shape[1] - 1)
+        self.canvas_image.polygons = q['polygons']
+        for i in reversed(range(len(self.canvas_image.polygons))):
+            self.canvas_image.update_raster(i)
+        self.canvas_image.to_tab(0)
+
+    def save_file(self, _ev):
+        fn = tk_filedialog.SaveAs(self.root, initialfile='region.json', filetypes=[('*.json files', '*.json')]).show()
+        if fn == '':
+            return
+        if not fn.endswith('.json'):
+            fn += '.json'
+        x_min, x_max = self.hist[1][0], self.hist[1][-1]
+        x_step = self.hist[1][1] - self.hist[1][0]
+        y_min, y_max = self.hist[2][0], self.hist[2][-1]
+        y_step = self.hist[2][1] - self.hist[2][0]
+        channels = self.map_window.channels_region
+        json.dump({
+            'channels': channels,
+            'x_min': x_min,
+            'x_max': x_max,
+            'x_step': x_step,
+            'y_min': y_min,
+            'y_max': y_max,
+            'y_step': y_step,
+            'polygons': self.canvas_image.polygons
+        }, open(fn, 'w'), indent=4)
 
     def on_ctrl(self, _arg):
         self.canvas_image.patch_image(self.base_image)
@@ -104,11 +136,10 @@ class RegionWindow:
             self.on_ctrl(None)
 
     def redraw_map_window(self, _arg):
-        self.canvas_image.mask.update_array(self.canvas_image.rasters[0])
+        self.canvas_image.mask.update_array(self.canvas_image.rasters[self.canvas_image.tab])
         self.map_window.map_image.mask = self.canvas_image.mask
         self.map_window.map_image.create_filtered_image()
         self.map_window.redraw()
-        pass  # todo
 
     def mode_add_polygon(self, ev):
         return self.canvas_image.mode_add_polygon(ev)
