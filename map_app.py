@@ -21,7 +21,6 @@ class MapWindow:
 
         self.channels_img = ['07', '04', '02']
         self._add_top_menu()
-        self._add_left_menu()
         self._add_canvas_frame()
         self.map_image = MapImage()
 
@@ -36,6 +35,9 @@ class MapWindow:
         self.save_btn = tk.Button(self.top_menu, text='Save\nImage')
         self.quit_btn = tk.Button(self.top_menu, text='Quit')
         self.to_region_btn = tk.Button(self.top_menu, text='Draw\nRegion')
+        self.slider = tk.Scale(self.top_menu, from_=1, to=42, orient='horizontal',
+                               command=self._delayed_reload_channels)
+        self.slider.set(10)
 
         self.load_btn.bind("<Button-1>", self._load_file)
         self.save_btn.bind("<Button-1>", self.save_file)
@@ -46,6 +48,7 @@ class MapWindow:
         self.save_btn.place(x=60, y=10, width=40, height=40)
         self.quit_btn.place(x=110, y=10, width=40, height=40)
         self.to_region_btn.place(x=-50, y=10, relx=1, width=40, height=40)
+        self.slider.place(x=270, y=10)
 
         self.ch_stringvars = [tk.StringVar() for _ in range(3)]
         self.ch_entries = [tk.Entry(self.top_menu, textvariable=v) for v in self.ch_stringvars]
@@ -66,28 +69,30 @@ class MapWindow:
         self.canvas_frame = canvas_frame
         self.canvas_image = CanvasImage(self.canvas_frame, self.canvas)
 
-    def _add_left_menu(self):
-        pass
-
     def quit(self, _ev):
         self.root.destroy()
 
-    def reload_channels(self, _ev):
+    def _delayed_reload_channels(self, _ev):
+        if not hasattr(self, '_job'):
+            self._job = None
+        if self._job:
+            self.root.after_cancel(self._job)
+        self._job = self.root.after(100, self.reload_channels)
+
+    def reload_channels(self, _ev=None):
         for i in range(3):
             self.channels_img[i] = string_to_value(self.ch_stringvars[i].get()) or self.channels_img[i]
             self.ch_entries[i].delete(0, 'end')
             self.ch_entries[i].insert(0, int(self.channels_img[i]))
         if self.map_image.original_image is not None:
-            self.map_image.create_original_img(self.channels_img)
+            self.map_image.create_original_img(self.channels_img, self.slider.get())
             self.canvas_image.reload_image(self.map_image.original_image, True)
 
     def _load_file(self, _ev):
         img_path = tk_filedialog.Open(self.root, filetypes=[('*.tif files', '*.tif')]).show()
         if img_path != '':
-            if hasattr(self, 'canvas_image'):
-                pass  # todo remove self.canvas_image data from memory
             self.map_image.load(img_path)
-            self.map_image.create_original_img(self.channels_img)
+            self.map_image.create_original_img(self.channels_img, self.slider.get())
             self.canvas_image.reload_image(self.map_image.original_image, True)
 
     def save_file(self, _ev):
@@ -144,16 +149,24 @@ class MapImage:
             for n, c in self.chan_dict.items():
                 self.load_band(c, f'{img_name}_{c}_{n}.tif')
 
-    def create_original_img(self, b):
-        arrays = [self.bands[self.chan_dict[c]] for c in b]
+    def create_original_img(self, b, r=1):
+        arrays = [self.bands[self.chan_dict[c]].copy() for c in b]
         if len(arrays) == 1:
             arrays *= 3
         if len(arrays) == 2:
             arrays += [np.zeros_like(arrays[0])]
         assert len(arrays) == 3
+
+        for i in range(3):
+            arrays[i] -= arrays[i].mean()
+            arrays[i] /= np.mean(arrays[i] ** 2)
+            arrays[i][arrays[i] < -r] = -r
+            arrays[i][arrays[i] > r] = r
         self.original_image = misc.toimage(np.array(arrays))
         # Image.fromarray(np.array(arrays).transpose([1,2,0]), mode='RGB') ???
         self.original_array = np.array(self.original_image)
+        # self.original_image = misc.toimage(self.original_array, cmin=0, cmax=255)
+        # self.original_array = np.array(self.original_image)
 
     def create_filtered_image(self):
         arrays = [self.bands[self.chan_dict[c]] for c in self.mask.channels]
