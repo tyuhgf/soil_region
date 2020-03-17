@@ -4,6 +4,7 @@ import tkinter.filedialog as tk_filedialog
 import numpy as np
 from PIL import Image
 from scipy import misc
+import tifffile
 
 from region_dialog_window import RegionDialogWindow
 from utils import string_to_value, get_color
@@ -104,8 +105,8 @@ class MapWindow:
         arrays = [self.map_image.bands[self.map_image.chan_dict[c]] for c in self.map_image.mask.channels]
         # todo revisit logic create_filtered_image
         types = self.map_image.mask.get_value(*tuple(arrays))
-        colors = get_color(types)
-        misc.toimage(colors, cmin=0, cmax=255).save(fn)
+        # misc.toimage(types).save(fn)
+        tifffile.imsave(fn, types, description=self.map_image.meta_dict)
 
     def on_ctrl(self, _arg):
         if self.map_image.original_image is not None:
@@ -136,10 +137,13 @@ class MapImage:
         self.original_image = None
         self.original_array = None
         self.filtered_image = None
+        self.meta_dict = None
 
     def load_band(self, b, img_path):
         try:
-            self.bands[b] = np.array(Image.open(img_path))
+            img = Image.open(img_path)
+            self.bands[b] = np.array(img)
+            self.meta_dict = img.tag
         except FileNotFoundError:
             pass
 

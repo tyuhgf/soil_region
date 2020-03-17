@@ -3,3 +3,4 @@ numpy
 matplotlib
 scipy==1.2.0
 scikit-image
+tifffile
