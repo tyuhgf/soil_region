@@ -2,9 +2,8 @@ import tkinter as tk
 import tkinter.filedialog as tk_filedialog
 
 import numpy as np
-from PIL import Image
 from scipy import misc
-import tifffile
+import gdal
 
 from region_dialog_window import RegionDialogWindow
 from utils import string_to_value, get_color
@@ -105,8 +104,13 @@ class MapWindow:
         arrays = [self.map_image.bands[self.map_image.chan_dict[c]] for c in self.map_image.mask.channels]
         # todo revisit logic create_filtered_image
         types = self.map_image.mask.get_value(*tuple(arrays))
-        # misc.toimage(types).save(fn)
-        tifffile.imsave(fn, types, description=self.map_image.meta_dict)
+
+        driver = gdal.GetDriverByName("GTiff")
+        outdata = driver.Create(fn, types.shape[1], types.shape[0], 1, gdal.GDT_UInt16)
+        outdata.SetGeoTransform(self.map_image.meta_dict['geotransform'])
+        outdata.SetProjection(self.map_image.meta_dict['projection'])
+        outdata.GetRasterBand(1).WriteArray(types)
+        outdata.FlushCache()  # saves to disk
 
     def on_ctrl(self, _arg):
         if self.map_image.original_image is not None:
@@ -140,12 +144,12 @@ class MapImage:
         self.meta_dict = None
 
     def load_band(self, b, img_path):
-        try:
-            img = Image.open(img_path)
-            self.bands[b] = np.array(img)
-            self.meta_dict = img.tag
-        except FileNotFoundError:
-            pass
+        ds = gdal.Open(img_path)
+        if ds is None:
+            return
+        band = ds.GetRasterBand(1)
+        self.bands[b] = band.ReadAsArray()
+        self.meta_dict = {'geotransform': ds.GetGeoTransform(), 'projection': ds.GetProjection()}
 
     def load(self, img_path):
         img_name = self._get_img_name(img_path)
@@ -167,10 +171,7 @@ class MapImage:
             arrays[i][arrays[i] < -r] = -r
             arrays[i][arrays[i] > r] = r
         self.original_image = misc.toimage(np.array(arrays))
-        # Image.fromarray(np.array(arrays).transpose([1,2,0]), mode='RGB') ???
         self.original_array = np.array(self.original_image)
-        # self.original_image = misc.toimage(self.original_array, cmin=0, cmax=255)
-        # self.original_array = np.array(self.original_image)
 
     def create_filtered_image(self):
         arrays = [self.bands[self.chan_dict[c]] for c in self.mask.channels]
