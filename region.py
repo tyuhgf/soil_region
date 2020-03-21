@@ -13,7 +13,7 @@ from segcanvas.wrappers import FocusLabelFrame
 
 
 class RegionWindow:
-    def __init__(self, map_window, hist):
+    def __init__(self, map_window, hist, base_image=None):
         self.app = map_window.app
         self.root = tk.Toplevel(self.app)
         self.root.title('Region')
@@ -25,7 +25,7 @@ class RegionWindow:
 
         self._add_top_menu()
         self._add_tabs()
-        self.base_image = plot_hist(hist[0])
+        self.base_image = base_image or plot_hist(hist[0])
         self._add_canvas_frame()
         self.canvas_image.reload_image(self.base_image)
 

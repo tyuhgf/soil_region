@@ -139,7 +139,7 @@ class RegionDialogWindow:
 
     def open_region_window(self, _ev):
         self.map_window.channels_region = self.channels_region
-        self.map_window.region_window = RegionWindow(self.map_window, self.hist)
+        self.map_window.region_window = RegionWindow(self.map_window, self.hist, self.base_image)
         self.quit()
 
     def quit(self, _ev=None):

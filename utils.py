@@ -4,7 +4,7 @@ from PIL import Image
 import matplotlib.pyplot as plt
 import sys
 
-from matplotlib.colors import LinearSegmentedColormap
+from matplotlib.colors import LinearSegmentedColormap, hsv_to_rgb
 
 COLORS = np.array([[0, 0, 0], [255, 0, 0], [0, 255, 0], [0, 0, 255], [0, 255, 255], [255, 0, 255], [255, 255, 0]])
 N_REGIONS = 5
@@ -66,11 +66,17 @@ def plot_hist(hist):
     array[0][:] = 0
     array[:][0] = 0
     array[array > 0] += array.sum() / (array > 0).sum() / 100
-    array = array ** .3
+    # array = array ** .3
+
+    array[array == 0] = np.inf
+
+    asort = np.argsort(np.argsort(array, axis=None)).reshape(array.shape)
+    asort[array == np.inf] = 0
+    asort **= 2
 
     cmap = LinearSegmentedColormap.from_list('my_cmap',
-                                             ["#000000", "#EF00FF", "#6600FF", "#0044FF", "#00E6FF",
-                                              "#00FF91", "#09FF00", "#89FF00", "#FFD500", "#FF2200"])
+                                             [hsv_to_rgb([0, 0, 0])] +
+                                             [hsv_to_rgb([i / 200, 1, 1]) for i in range(170, 2, -1)])
 
-    plt.imsave(TMP_FOLDER + 'qwe.png', array.transpose()[::-1, :], cmap=cmap)
+    plt.imsave(TMP_FOLDER + 'qwe.png', asort.transpose()[::-1, :], cmap=cmap)
     return Image.open(TMP_FOLDER + 'qwe.png').convert('RGB')
