@@ -1,8 +1,9 @@
 import tkinter as tk
 import tkinter.filedialog as tk_filedialog
 
+import os.path
 import numpy as np
-from scipy import misc
+from PIL import Image
 import gdal
 
 from region_dialog_window import RegionDialogWindow
@@ -71,6 +72,7 @@ class MapWindow:
 
     def quit(self, _ev):
         self.root.destroy()
+        pass
 
     def _delayed_reload_channels(self, _ev):
         if not hasattr(self, '_job'):
@@ -144,6 +146,8 @@ class MapImage:
         self.meta_dict = None
 
     def load_band(self, b, img_path):
+        if not os.path.isfile(img_path):
+            return
         ds = gdal.Open(img_path)
         if ds is None:
             return
@@ -170,7 +174,9 @@ class MapImage:
             arrays[i] /= np.mean(arrays[i] ** 2)
             arrays[i][arrays[i] < -r] = -r
             arrays[i][arrays[i] > r] = r
-        self.original_image = misc.toimage(np.array(arrays))
+            arrays[i] = ((arrays[i] - arrays[i].min()) / (arrays[i].max() - arrays[i].min()) * 255).astype('uint8')
+        # self.original_image = misc.toimage(np.array(arrays))
+        self.original_image = Image.fromarray(np.array(arrays).transpose([1, 2, 0]), mode='RGB')
         self.original_array = np.array(self.original_image)
 
     def create_filtered_image(self):
@@ -178,8 +184,8 @@ class MapImage:
 
         types = self.mask.get_value(*tuple(arrays))
         colors = get_color(types)
-        filtered_image_array = self.original_array * 0.5 + colors * 0.5
-        self.filtered_image = misc.toimage(filtered_image_array, cmin=0, cmax=255)
+        filtered_image_array = (self.original_array * 0.5 + colors * 0.5).astype('uint8')
+        self.filtered_image = Image.fromarray(filtered_image_array, mode='RGB')
 
     @classmethod
     def _get_img_name(cls, img_path):
@@ -196,3 +202,4 @@ if __name__ == '__main__':
     _app = tk.Tk()
     MapWindow(_app)
     _app.mainloop()
+    pass

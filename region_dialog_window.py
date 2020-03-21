@@ -1,10 +1,11 @@
 import tkinter as tk
 import numpy as np
+from PIL.ImageTk import PhotoImage
 
 from region import RegionWindow
 from segcanvas.canvas import CanvasImage
 from segcanvas.wrappers import FocusLabelFrame
-from utils import string_to_value, plot_hist
+from utils import string_to_value, plot_hist2d, plot_hist
 
 
 class RegionDialogWindow:
@@ -18,6 +19,9 @@ class RegionDialogWindow:
 
         self.channels_region = ['03', '04']
         self.steps = [100, 100]
+
+        self.graph_x_img = None
+        self.graph_y_img = None
 
         self._add_top_menu()
         self._calc_ranges()
@@ -57,8 +61,12 @@ class RegionDialogWindow:
             e.bind('<Return>', self.reload_graphs)
 
     def _calc_ranges(self, _ev=None):
-        values = [self.map_image.bands[self.map_image.chan_dict[c]] for c in self.channels_region]
+        values = [self.map_image.bands[self.map_image.chan_dict[c]].copy() for c in self.channels_region]
         self.x_range, self.y_range = ([values[i].min(), values[i].max()] for i in range(2))
+
+        for i in range(2):
+            values[i][values[i] < values[i].min() + 0.00000001] = np.nan
+        self.graphs = [plot_hist(values[i]) for i in range(2)]
 
     def _add_left_menu(self):
         self.left_menu = tk.Frame(self.root, width=400, bg='red')
@@ -87,6 +95,13 @@ class RegionDialogWindow:
             e.delete(0, -1)
             e.insert(0, self.y_range[i])
             e.bind('<Return>', self._reload_hist)
+
+        self.graph_x_img = PhotoImage(self.graphs[0], master=self.left_menu)
+        self.graph_y_img = PhotoImage(self.graphs[1], master=self.left_menu)
+        self.graph_x_frame = tk.Label(self.left_menu, image=self.graph_x_img)
+        self.graph_y_frame = tk.Label(self.left_menu, image=self.graph_y_img)
+        self.graph_x_frame.place(x=10, y=10)
+        self.graph_y_frame.place(x=10, y=410)
 
     def _add_preview(self, _ev=None):
         canvas_frame = FocusLabelFrame(self.root)
@@ -118,7 +133,7 @@ class RegionDialogWindow:
                                    bins=self.steps,
                                    range=[self.x_range, self.y_range])
 
-        self.base_image = plot_hist(self.hist[0])
+        self.base_image = plot_hist2d(self.hist[0])
 
         self.canvas_image.reload_image(self.base_image)
 
@@ -134,6 +149,11 @@ class RegionDialogWindow:
 
         self._calc_ranges()
         self._reload_hist()
+
+        self.graph_x_img = PhotoImage(self.graphs[0], master=self.left_menu)
+        self.graph_y_img = PhotoImage(self.graphs[1], master=self.left_menu)
+        self.graph_x_frame['image'] = self.graph_x_img
+        self.graph_y_frame['image'] = self.graph_y_img
 
         # todo graphs
 

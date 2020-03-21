@@ -61,22 +61,31 @@ def string_to_value(s, dtype='int_to_str', logger=None):
         return None
 
 
-def plot_hist(hist):
+def plot_hist2d(hist):
     array = hist.copy()
     array[0][:] = 0
     array[:][0] = 0
-    array[array > 0] += array.sum() / (array > 0).sum() / 100
-    # array = array ** .3
 
-    array[array == 0] = np.inf
-
-    asort = np.argsort(np.argsort(array, axis=None)).reshape(array.shape)
-    asort[array == np.inf] = 0
-    asort **= 2
+    array = array * 10000 // array.max()
+    array[hist > 0] += 1
+    array = array.astype(int)
+    h, _ = np.histogram(array.flatten(), array.max() + 1)
+    cdf = (h ** .5).cumsum()
 
     cmap = LinearSegmentedColormap.from_list('my_cmap',
                                              [hsv_to_rgb([0, 0, 0])] +
-                                             [hsv_to_rgb([i / 200, 1, 1]) for i in range(170, 2, -1)])
+                                             [hsv_to_rgb([i / 1000, 1, 1]) for i in range(888, 20, -1)])
+    plt.imsave(TMP_FOLDER + 'hist2d.png', cdf[array].transpose()[::-1, :], cmap=cmap)
+    plt.close('all')
+    return Image.open(TMP_FOLDER + 'hist2d.png').convert('RGB')
 
-    plt.imsave(TMP_FOLDER + 'qwe.png', asort.transpose()[::-1, :], cmap=cmap)
-    return Image.open(TMP_FOLDER + 'qwe.png').convert('RGB')
+
+def plot_hist(x):
+    q = x.flatten().copy()
+    q = q[~np.isnan(q)]
+    dpi = 100
+    plt.figure(figsize=(380/dpi, 300/dpi), dpi=dpi)
+    plt.hist(q, bins=1000)
+    plt.savefig('/tmp/hist.png', figsize=(380/dpi, 300/dpi), dpi=dpi)
+    plt.close('all')
+    return Image.open(TMP_FOLDER + 'hist.png').convert('RGB')

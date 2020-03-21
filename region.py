@@ -2,12 +2,14 @@ import json
 import tkinter as tk
 from tkinter import ttk
 import tkinter.filedialog as tk_filedialog
+from tkinter.messagebox import showwarning
+
 import numpy as np
-from scipy import misc
+from PIL import Image
 from skimage.draw import polygon
 
 from segcanvas.canvas import CanvasImage
-from utils import Mask, NamedFrame, N_REGIONS, plot_hist, get_color
+from utils import Mask, NamedFrame, N_REGIONS, plot_hist2d, get_color
 
 from segcanvas.wrappers import FocusLabelFrame
 
@@ -25,7 +27,7 @@ class RegionWindow:
 
         self._add_top_menu()
         self._add_tabs()
-        self.base_image = base_image or plot_hist(hist[0])
+        self.base_image = base_image or plot_hist2d(hist[0])
         self._add_canvas_frame()
         self.canvas_image.reload_image(self.base_image)
 
@@ -97,7 +99,8 @@ class RegionWindow:
 
         q = json.load(open(load_path, 'r'))
         if q['channels'] != channels:
-            return  # todo message box
+            showwarning('Warning', 'Cannot load region with wrong channels!')
+            return
         for channel_polygons in q['polygons']:
             for p in channel_polygons:
                 for v in p:
@@ -212,7 +215,7 @@ class RegionImage(CanvasImage):
         else:
             mask = np.array([raster == 0] * 3).transpose([1, 2, 0])
             crafted_image_array = crafted_image_array * (1 - mask) + self.base_array * mask
-        self.crafted_image = misc.toimage(crafted_image_array.transpose(1, 0, 2), cmin=0, cmax=255)
+        self.crafted_image = Image.fromarray(crafted_image_array.astype('uint8').transpose(1, 0, 2))
 
     def mode_add_polygon(self, _ev):
         if self.tab > 0:
