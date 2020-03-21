@@ -85,7 +85,7 @@ def plot_hist(x):
     q = q[~np.isnan(q)]
     dpi = 100
     plt.figure(figsize=(380/dpi, 300/dpi), dpi=dpi)
-    plt.hist(q, bins=1000)
+    plt.hist(q, bins=256)
     plt.savefig('/tmp/hist.png', figsize=(380/dpi, 300/dpi), dpi=dpi)
     plt.close('all')
     return Image.open(TMP_FOLDER + 'hist.png').convert('RGB')

@@ -155,8 +155,6 @@ class RegionDialogWindow:
         self.graph_x_frame['image'] = self.graph_x_img
         self.graph_y_frame['image'] = self.graph_y_img
 
-        # todo graphs
-
     def open_region_window(self, _ev):
         self.map_window.channels_region = self.channels_region
         self.map_window.region_window = RegionWindow(self.map_window, self.hist, self.base_image)
