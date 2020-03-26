@@ -220,6 +220,11 @@ class RegionImage(CanvasImage):
     def mode_add_polygon(self, _ev):
         if self.tab > 0:
             self.mode = 'ADD'
+
+            if len(self.polygons[self.tab]) > 0 and len(self.polygons[self.tab][-1]) < 3:
+                self.polygons[self.tab].pop(-1)
+                self.update_movables(self.tab)
+
             self.polygons[self.tab].append([])
 
     def mode_default(self, _ev):

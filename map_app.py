@@ -7,7 +7,7 @@ from PIL import Image
 import gdal
 
 from region_dialog_window import RegionDialogWindow
-from utils import string_to_value, get_color
+from utils import string_to_value, get_color, SATELLITE_CHANNELS
 
 from segcanvas.canvas import CanvasImage
 from segcanvas.wrappers import FocusLabelFrame
@@ -81,9 +81,12 @@ class MapWindow:
             self.root.after_cancel(self._job)
         self._job = self.root.after(100, self.reload_channels)
 
-    def reload_channels(self, _ev=None):
+    def reload_channels(self, _ev=None, channels=None):
         for i in range(3):
-            self.channels_img[i] = string_to_value(self.ch_stringvars[i].get()) or self.channels_img[i]
+            if channels:
+                self.channels_img[i] = channels[i]
+            else:
+                self.channels_img[i] = string_to_value(self.ch_stringvars[i].get()) or self.channels_img[i]
             self.ch_entries[i].delete(0, 'end')
             self.ch_entries[i].insert(0, int(self.channels_img[i]))
         if self.map_image.original_image is not None:
@@ -94,6 +97,7 @@ class MapWindow:
         img_path = tk_filedialog.Open(self.root, filetypes=[('*.tif files', '*.tif')]).show()
         if img_path != '':
             self.map_image.load(img_path)
+            self.reload_channels(channels=[self.map_image.chan_dict_rev[c] for c in ['swir2', 'nir', 'green']])
             self.map_image.create_original_img(self.channels_img, self.slider.get())
             self.canvas_image.reload_image(self.map_image.original_image, True)
 
@@ -134,11 +138,8 @@ class MapWindow:
 
 
 class MapImage:
-    channels = ['blue', 'green', 'red', 'nir', 'swir1', '06', 'swir2']
-    chan_dict = {str(i + 1).zfill(2): c for i, c in enumerate(channels)}
-
     def __init__(self):
-        self.bands = {b: None for b in self.channels}
+        self.bands = None
         self.mask = None
         self.original_image = None
         self.original_array = None
@@ -157,6 +158,7 @@ class MapImage:
 
     def load(self, img_path):
         img_name = self._get_img_name(img_path)
+        self.bands = dict()
         if img_name != '':
             for n, c in self.chan_dict.items():
                 self.load_band(c, f'{img_name}_{c}_{n}.tif')
@@ -187,12 +189,16 @@ class MapImage:
         filtered_image_array = (self.original_array * 0.5 + colors * 0.5).astype('uint8')
         self.filtered_image = Image.fromarray(filtered_image_array, mode='RGB')
 
-    @classmethod
-    def _get_img_name(cls, img_path):
+    def _get_img_name(self, img_path):
         if not img_path.endswith('.tif'):
             return ''
+        if img_path.split('_')[-4] not in SATELLITE_CHANNELS.keys():
+            return ''
+        self.satellite_type = img_path.split('_')[-4]
+        self.chan_dict = SATELLITE_CHANNELS[self.satellite_type]
+        self.chan_dict_rev = {v: k for k, v in self.chan_dict.items()}
         img_path = img_path[:-4]
-        for n, c in cls.chan_dict.items():
+        for n, c in self.chan_dict.items():
             if img_path.endswith(f'_{c}_{n}'):
                 return img_path[:-2 - len(c) - len(n)]
         return ''

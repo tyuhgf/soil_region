@@ -17,7 +17,7 @@ class RegionDialogWindow:
         self.root.title('Preview')
         self.root.geometry("%dx%d%+d%+d" % (1200, 900, 500, 100))
 
-        self.channels_region = ['03', '04']
+        self.channels_region = [self.map_window.map_image.chan_dict_rev[c] for c in ['red', 'nir']]
         self.steps = [100, 100]
 
         self.graph_x_img = None
