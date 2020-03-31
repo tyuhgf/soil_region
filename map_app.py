@@ -2,6 +2,8 @@ import tkinter as tk
 import tkinter.filedialog as tk_filedialog
 
 import os.path
+from tkinter import messagebox
+
 import numpy as np
 from PIL import Image
 import gdal
@@ -17,13 +19,17 @@ class MapWindow:
     def __init__(self, app):
         self.app = app
         self.root = app
+        self.root.protocol("WM_DELETE_WINDOW", self.quit)
         self.root.title('Map')
         self.root.geometry("%dx%d%+d%+d" % (700, 700, 100, 100))
 
         self.channels_img = ['07', '04', '02']
+        self.n_regions = 5
+        self.colors = np.array([[0, 0, 0], [255, 0, 0], [0, 255, 0], [0, 0, 255], [0, 255, 255], [255, 0, 255]])
+
         self._add_top_menu()
         self._add_canvas_frame()
-        self.map_image = MapImage()
+        self.map_image = MapImage(self.colors)
 
         self.root.bind('<Control_L>', self.on_ctrl)
         self.root.bind('<KeyRelease>', self.redraw)
@@ -70,9 +76,9 @@ class MapWindow:
         self.canvas_frame = canvas_frame
         self.canvas_image = CanvasImage(self.canvas_frame, self.canvas)
 
-    def quit(self, _ev):
-        self.root.destroy()
-        pass
+    def quit(self, _ev=None):
+        if messagebox.askyesno(title="Quit?", message="Closing app may cause data loss."):
+            self.root.destroy()
 
     def _delayed_reload_channels(self, _ev):
         if not hasattr(self, '_job'):
@@ -96,6 +102,10 @@ class MapWindow:
     def _load_file(self, _ev):
         img_path = tk_filedialog.Open(self.root, filetypes=[('*.tif files', '*.tif')]).show()
         if img_path != '':
+            if hasattr(self, 'region_window'):
+                self.region_window.quit(None)
+            if hasattr(self, 'region_dialog_window'):
+                self.region_dialog_window.quit(None)
             self.map_image.load(img_path)
             self.reload_channels(channels=[self.map_image.chan_dict_rev[c] for c in ['swir2', 'nir', 'green']])
             self.map_image.create_original_img(self.channels_img, self.slider.get())
@@ -130,7 +140,10 @@ class MapWindow:
 
     def _open_region_dialog_window(self, _arg):
         if hasattr(self, 'region_window'):
-            self.region_window.quit(None)
+            if messagebox.askyesno(title="Close Region window?", message="Closing Region window may cause data loss."):
+                self.region_window.quit(None)
+            else:
+                return
         if hasattr(self, 'region_dialog_window'):
             self.region_dialog_window.quit(None)
 
@@ -138,7 +151,8 @@ class MapWindow:
 
 
 class MapImage:
-    def __init__(self):
+    def __init__(self, colors):
+        self.colors = colors
         self.bands = None
         self.mask = None
         self.original_image = None
@@ -185,7 +199,7 @@ class MapImage:
         arrays = [self.bands[self.chan_dict[c]] for c in self.mask.channels]
 
         types = self.mask.get_value(*tuple(arrays))
-        colors = get_color(types)
+        colors = get_color(types, self.colors)
         filtered_image_array = (self.original_array * 0.5 + colors * 0.5).astype('uint8')
         self.filtered_image = Image.fromarray(filtered_image_array, mode='RGB')
 

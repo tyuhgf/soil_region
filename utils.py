@@ -8,9 +8,6 @@ from tempfile import gettempdir
 
 from matplotlib.colors import LinearSegmentedColormap, hsv_to_rgb
 
-COLORS = np.array([[0, 0, 0], [255, 0, 0], [0, 255, 0], [0, 0, 255], [0, 255, 255], [255, 0, 255], [255, 255, 0]])
-N_REGIONS = 5
-
 TMP_FOLDER = gettempdir()  # '/tmp/' if sys.platform == 'linux' else 'C:\\Temp\\'
 
 SATELLITE_CHANNELS = {
@@ -61,16 +58,16 @@ class Mask:
         self.array = array
 
 
-def get_color(t):
-    return np.array([COLORS.transpose()[i].take(t) for i in range(3)]).transpose((1, 2, 0))
+def get_color(t, colors):
+    return np.array([colors.transpose()[i].take(t) for i in range(3)]).transpose((1, 2, 0))
 
 
-class NamedFrame(ttk.Frame):
-    def __init__(self, master, name=None, number=0):
+class AugmentedLabelFrame(ttk.LabelFrame):
+    def __init__(self, master):
         super().__init__(master)
-        self.name = name
-        self.number = number
-        self.pack()
+        self.name = None
+        self.number = None
+        self.image = None
 
 
 def string_to_value(s, dtype='int_to_str', logger=None):
