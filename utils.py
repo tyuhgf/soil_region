@@ -113,7 +113,7 @@ def plot_hist(x):
     dpi = 100
     plt.figure(figsize=(380 / dpi, 300 / dpi), dpi=dpi)
     plt.hist(q, bins=256)
-    fn = os.path.join(TMP_FOLDER, 'hist2d.png')
+    fn = os.path.join(TMP_FOLDER, 'hist.png')
     plt.savefig(fn, figsize=(380 / dpi, 300 / dpi), dpi=dpi)
     plt.close('all')
     return Image.open(fn).convert('RGB')
