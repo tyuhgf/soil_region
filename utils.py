@@ -1,15 +1,41 @@
+import os
+
 import numpy as np
 from tkinter import ttk
 from PIL import Image
 import matplotlib.pyplot as plt
-import sys
+from tempfile import gettempdir
 
 from matplotlib.colors import LinearSegmentedColormap, hsv_to_rgb
 
-COLORS = np.array([[0, 0, 0], [255, 0, 0], [0, 255, 0], [0, 0, 255], [0, 255, 255], [255, 0, 255], [255, 255, 0]])
-N_REGIONS = 5
+TMP_FOLDER = gettempdir()  # '/tmp/' if sys.platform == 'linux' else 'C:\\Temp\\'
 
-TMP_FOLDER = '/tmp/' if sys.platform == 'linux' else 'C:\\Temp\\'
+SATELLITE_CHANNELS = {
+    'LT05': {
+        '01': 'blue',
+        '02': 'green',
+        '03': 'red',
+        '04': 'nir',
+        '05': 'swir1',
+        '07': 'swir2'
+    },
+    'LE07': {
+        '01': 'blue',
+        '02': 'green',
+        '03': 'red',
+        '04': 'nir',
+        '05': 'swir1',
+        '07': 'swir2'
+    },
+    'LC08': {
+        '02': 'blue',
+        '03': 'green',
+        '04': 'red',
+        '05': 'nir',
+        '06': 'swir1',
+        '07': 'swir2'
+    }
+}
 
 
 class Mask:
@@ -32,16 +58,16 @@ class Mask:
         self.array = array
 
 
-def get_color(t):
-    return np.array([COLORS.transpose()[i].take(t) for i in range(3)]).transpose((1, 2, 0))
+def get_color(t, colors):
+    return np.array([colors.transpose()[i].take(t) for i in range(3)]).transpose((1, 2, 0))
 
 
-class NamedFrame(ttk.Frame):
-    def __init__(self, master, name=None, number=0):
+class AugmentedLabelFrame(ttk.LabelFrame):
+    def __init__(self, master):
         super().__init__(master)
-        self.name = name
-        self.number = number
-        self.pack()
+        self.name = None
+        self.number = None
+        self.image = None
 
 
 def string_to_value(s, dtype='int_to_str', logger=None):
@@ -75,17 +101,19 @@ def plot_hist2d(hist):
     cmap = LinearSegmentedColormap.from_list('my_cmap',
                                              [hsv_to_rgb([0, 0, 0])] +
                                              [hsv_to_rgb([i / 1000, 1, 1]) for i in range(888, 20, -1)])
-    plt.imsave(TMP_FOLDER + 'hist2d.png', cdf[array].transpose()[::-1, :], cmap=cmap)
+    fn = os.path.join(TMP_FOLDER, 'hist2d.png')
+    plt.imsave(fn, cdf[array].transpose()[::-1, :], cmap=cmap)
     plt.close('all')
-    return Image.open(TMP_FOLDER + 'hist2d.png').convert('RGB')
+    return Image.open(fn).convert('RGB')
 
 
 def plot_hist(x):
     q = x.flatten().copy()
     q = q[~np.isnan(q)]
     dpi = 100
-    plt.figure(figsize=(380/dpi, 300/dpi), dpi=dpi)
+    plt.figure(figsize=(380 / dpi, 300 / dpi), dpi=dpi)
     plt.hist(q, bins=256)
-    plt.savefig(TMP_FOLDER + 'hist.png', figsize=(380/dpi, 300/dpi), dpi=dpi)
+    fn = os.path.join(TMP_FOLDER, 'hist2d.png')
+    plt.savefig(fn, figsize=(380 / dpi, 300 / dpi), dpi=dpi)
     plt.close('all')
-    return Image.open(TMP_FOLDER + 'hist.png').convert('RGB')
+    return Image.open(fn).convert('RGB')

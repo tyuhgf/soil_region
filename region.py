@@ -1,15 +1,17 @@
 import json
+import os
 import tkinter as tk
-from tkinter import ttk
+from tkinter import ttk, messagebox
 import tkinter.filedialog as tk_filedialog
+from tkinter.colorchooser import askcolor
 from tkinter.messagebox import showwarning
 
 import numpy as np
-from PIL import Image
+from PIL import Image, ImageTk
 from skimage.draw import polygon
 
 from segcanvas.canvas import CanvasImage
-from utils import Mask, NamedFrame, N_REGIONS, plot_hist2d, get_color
+from utils import Mask, plot_hist2d, get_color, AugmentedLabelFrame
 
 from segcanvas.wrappers import FocusLabelFrame
 
@@ -18,6 +20,7 @@ class RegionWindow:
     def __init__(self, map_window, hist, base_image=None):
         self.app = map_window.app
         self.root = tk.Toplevel(self.app)
+        self.root.protocol("WM_DELETE_WINDOW", self.quit)
         self.root.title('Region')
         self.root.geometry("%dx%d%+d%+d" % (600, 600, 500, 100))
         self.map_window = map_window
@@ -26,10 +29,12 @@ class RegionWindow:
         self.shape = hist[0].shape
 
         self._add_top_menu()
+        self.n_tabs = map_window.n_regions + 1
         self._add_tabs()
         self.base_image = base_image or plot_hist2d(hist[0])
         self._add_canvas_frame()
         self.canvas_image.reload_image(self.base_image)
+        self._load_colors(load_path='colors.json')
 
         self.root.bind('<Control_L>', self.on_ctrl)
         self.root.bind('<KeyRelease>', self.redraw)
@@ -68,12 +73,19 @@ class RegionWindow:
 
     def _add_tabs(self):
         self.tab_parent = ttk.Notebook(self.root)
-        self.tabs = [NamedFrame(self.tab_parent, name=f'color{i}', number=i) for i in range(N_REGIONS + 1)]
-        self.tabs[0].name = 'all'
 
-        for t in self.tabs:
-            self.tab_parent.add(t, text=t.name)
-            t.bind('<Visibility>', self._activate_tab)
+        self.tabs = []
+        for i in range(self.n_tabs):
+            self.tabs.append(AugmentedLabelFrame(self.tab_parent))
+            self.tabs[-1].name = f'color{i}' if i > 0 else 'all'
+            self.tabs[-1].number = i
+            self.tabs[-1].image = ImageTk.PhotoImage(Image.fromarray(np.array(
+                [[self.map_window.colors[i] for _ in range(20)] for _ in range(20)], dtype='uint8'), mode='RGB'))
+
+            self.tab_parent.add(self.tabs[-1], text=self.tabs[-1].name, image=self.tabs[-1].image, compound='right')
+            self.tabs[-1].bind('<Visibility>', self._activate_tab)
+        self.tab_parent.bind('<Double-Button-1>', self._choose_color)
+        self.tab_parent.bind('<Double-Button-3>', self._save_or_load_colors)
 
         self.tab_parent.pack(fill='x', side='top')
 
@@ -81,11 +93,57 @@ class RegionWindow:
         if hasattr(self, 'canvas_image'):
             self.canvas_image.to_tab(ev.widget.number)
 
-    def quit(self, _ev):
-        delattr(self.map_window, 'region_window')
-        self.map_window.map_image.filtered_image = None
-        self.root.destroy()
-        del self
+    def _choose_color(self, _ev, n=None, color='ask'):
+        n = n or self.canvas_image.tab or 0
+        if n == 0:
+            return
+        if color == 'ask':
+            color = askcolor(initialcolor='#%02x%02x%02x' % tuple(self.map_window.colors[n]))[0]
+        if color is not None:
+            self.map_window.colors[n] = np.array(color, dtype=int)
+            self.tabs[n].image = ImageTk.PhotoImage(Image.fromarray(
+                np.array([[self.map_window.colors[n] for _ in range(20)] for _ in range(20)], dtype='uint8'),
+                mode='RGB'))
+            self.tab_parent.tab(n, text=self.tabs[n].name, image=self.tabs[n].image, compound='right')
+            if n == self.canvas_image.tab:
+                self.canvas_image.to_tab(n)  # update current image
+
+    def _save_colors(self, _ev=None):
+        if hasattr(self, 'save_or_load_colors_window'):
+            self.save_or_load_colors_window.destroy()
+        fn = tk_filedialog.SaveAs(self.root, initialfile='colors.json', filetypes=[('*.json files', '*.json')]).show()
+        if fn == '':
+            return
+        if not fn.endswith('.json'):
+            fn += '.json'
+        json.dump({
+            'colors': self.map_window.colors.tolist()
+        }, open(fn, 'w'), indent=4)
+
+    def _load_colors(self, _ev=None, load_path=None):
+        if hasattr(self, 'save_or_load_colors_window'):
+            self.save_or_load_colors_window.destroy()
+        load_path = load_path or tk_filedialog.Open(self.root, filetypes=[('', '*.json')]).show()
+        if load_path == '' or not os.path.isfile(load_path):
+            return
+        q = json.load(open(load_path, 'r'))
+        for i in range(len(q['colors'])):
+            self._choose_color(None, n=i, color=q['colors'][i])
+
+    def _save_or_load_colors(self, _ev):
+        self.save_or_load_colors_window = tk.Toplevel(self.root)
+        self.save_or_load_colors_window.title('Save or Load Colors?')
+        message = 'Save or Load Colors?'
+        tk.Label(self.save_or_load_colors_window, text=message).pack()
+        tk.Button(self.save_or_load_colors_window, text='Save', command=self._save_colors).pack()
+        tk.Button(self.save_or_load_colors_window, text='Load', command=self._load_colors).pack()
+
+    def quit(self, _ev=None):
+        if messagebox.askyesno(title="Quit?", message="Closing window may cause data loss."):
+            delattr(self.map_window, 'region_window')
+            self.map_window.map_image.filtered_image = None
+            self.root.destroy()
+            del self
 
     def _load_file(self, _ev):
         load_path = tk_filedialog.Open(self.root, filetypes=[('', '*.json')]).show()
@@ -168,9 +226,10 @@ class RegionImage(CanvasImage):
 
         self.tab = None
         self.mode = 'DEFAULT'
-        self.rasters = [np.zeros(self.region_window.shape, dtype=int) for _ in range(N_REGIONS + 1)]
-        self.polygons = [[] for _ in range(N_REGIONS + 1)]  # list of polygons for each tab
-        self.movables = [[] for _ in range(N_REGIONS + 1)]  # vertices and centers of edges for polygons of a tab
+        self.n_tabs = region_window.n_tabs
+        self.rasters = [np.zeros(self.region_window.shape, dtype=int) for _ in range(self.n_tabs)]
+        self.polygons = [[] for _ in range(self.n_tabs)]  # list of polygons for each tab
+        self.movables = [[] for _ in range(self.n_tabs)]  # vertices and centers of edges for polygons of a tab
         self._last_lb_click_event = None
         self.__double_click_flag = False
         self._create_crafted_image(0)
@@ -191,9 +250,9 @@ class RegionImage(CanvasImage):
             for p in self.polygons[n]:
                 p = np.array(p)
                 rr, cc = polygon(p[:, 0], p[:, 1], self.region_window.shape)
-                self.rasters[n][rr, cc] = 1
+                self.rasters[n][rr, cc] = n
         if n == 0:
-            for m in range(1, N_REGIONS + 1):
+            for m in range(1, self.n_tabs):
                 self.rasters[0][self.rasters[m] > 0] = m
 
     def update_movables(self, n):
@@ -209,7 +268,7 @@ class RegionImage(CanvasImage):
 
     def _create_crafted_image(self, n):
         raster = self.rasters[n][:, ::-1]
-        crafted_image_array = get_color(raster)
+        crafted_image_array = get_color(raster, self.region_window.map_window.colors)
         if n == 0:
             crafted_image_array = crafted_image_array * 0.5 + self.base_array * 0.5
         else:
@@ -220,6 +279,11 @@ class RegionImage(CanvasImage):
     def mode_add_polygon(self, _ev):
         if self.tab > 0:
             self.mode = 'ADD'
+
+            if len(self.polygons[self.tab]) > 0 and len(self.polygons[self.tab][-1]) < 3:
+                self.polygons[self.tab].pop(-1)
+                self.update_movables(self.tab)
+
             self.polygons[self.tab].append([])
 
     def mode_default(self, _ev):

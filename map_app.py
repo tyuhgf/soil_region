@@ -2,12 +2,14 @@ import tkinter as tk
 import tkinter.filedialog as tk_filedialog
 
 import os.path
+from tkinter import messagebox
+
 import numpy as np
 from PIL import Image
 import gdal
 
 from region_dialog_window import RegionDialogWindow
-from utils import string_to_value, get_color
+from utils import string_to_value, get_color, SATELLITE_CHANNELS
 
 from segcanvas.canvas import CanvasImage
 from segcanvas.wrappers import FocusLabelFrame
@@ -17,13 +19,17 @@ class MapWindow:
     def __init__(self, app):
         self.app = app
         self.root = app
+        self.root.protocol("WM_DELETE_WINDOW", self.quit)
         self.root.title('Map')
         self.root.geometry("%dx%d%+d%+d" % (700, 700, 100, 100))
 
         self.channels_img = ['07', '04', '02']
+        self.n_regions = 5
+        self.colors = np.array([[0, 0, 0], [255, 0, 0], [0, 255, 0], [0, 0, 255], [0, 255, 255], [255, 0, 255]])
+
         self._add_top_menu()
         self._add_canvas_frame()
-        self.map_image = MapImage()
+        self.map_image = MapImage(self.colors)
 
         self.root.bind('<Control_L>', self.on_ctrl)
         self.root.bind('<KeyRelease>', self.redraw)
@@ -70,9 +76,9 @@ class MapWindow:
         self.canvas_frame = canvas_frame
         self.canvas_image = CanvasImage(self.canvas_frame, self.canvas)
 
-    def quit(self, _ev):
-        self.root.destroy()
-        pass
+    def quit(self, _ev=None):
+        if messagebox.askyesno(title="Quit?", message="Closing app may cause data loss."):
+            self.root.destroy()
 
     def _delayed_reload_channels(self, _ev):
         if not hasattr(self, '_job'):
@@ -81,9 +87,12 @@ class MapWindow:
             self.root.after_cancel(self._job)
         self._job = self.root.after(100, self.reload_channels)
 
-    def reload_channels(self, _ev=None):
+    def reload_channels(self, _ev=None, channels=None):
         for i in range(3):
-            self.channels_img[i] = string_to_value(self.ch_stringvars[i].get()) or self.channels_img[i]
+            if channels:
+                self.channels_img[i] = channels[i]
+            else:
+                self.channels_img[i] = string_to_value(self.ch_stringvars[i].get()) or self.channels_img[i]
             self.ch_entries[i].delete(0, 'end')
             self.ch_entries[i].insert(0, int(self.channels_img[i]))
         if self.map_image.original_image is not None:
@@ -93,7 +102,12 @@ class MapWindow:
     def _load_file(self, _ev):
         img_path = tk_filedialog.Open(self.root, filetypes=[('*.tif files', '*.tif')]).show()
         if img_path != '':
+            if hasattr(self, 'region_window'):
+                self.region_window.quit(None)
+            if hasattr(self, 'region_dialog_window'):
+                self.region_dialog_window.quit(None)
             self.map_image.load(img_path)
+            self.reload_channels(channels=[self.map_image.chan_dict_rev[c] for c in ['swir2', 'nir', 'green']])
             self.map_image.create_original_img(self.channels_img, self.slider.get())
             self.canvas_image.reload_image(self.map_image.original_image, True)
 
@@ -126,7 +140,10 @@ class MapWindow:
 
     def _open_region_dialog_window(self, _arg):
         if hasattr(self, 'region_window'):
-            self.region_window.quit(None)
+            if messagebox.askyesno(title="Close Region window?", message="Closing Region window may cause data loss."):
+                self.region_window.quit(None)
+            else:
+                return
         if hasattr(self, 'region_dialog_window'):
             self.region_dialog_window.quit(None)
 
@@ -134,11 +151,9 @@ class MapWindow:
 
 
 class MapImage:
-    channels = ['blue', 'green', 'red', 'nir', 'swir1', '06', 'swir2']
-    chan_dict = {str(i + 1).zfill(2): c for i, c in enumerate(channels)}
-
-    def __init__(self):
-        self.bands = {b: None for b in self.channels}
+    def __init__(self, colors):
+        self.colors = colors
+        self.bands = None
         self.mask = None
         self.original_image = None
         self.original_array = None
@@ -157,6 +172,7 @@ class MapImage:
 
     def load(self, img_path):
         img_name = self._get_img_name(img_path)
+        self.bands = dict()
         if img_name != '':
             for n, c in self.chan_dict.items():
                 self.load_band(c, f'{img_name}_{c}_{n}.tif')
@@ -183,16 +199,20 @@ class MapImage:
         arrays = [self.bands[self.chan_dict[c]] for c in self.mask.channels]
 
         types = self.mask.get_value(*tuple(arrays))
-        colors = get_color(types)
+        colors = get_color(types, self.colors)
         filtered_image_array = (self.original_array * 0.5 + colors * 0.5).astype('uint8')
         self.filtered_image = Image.fromarray(filtered_image_array, mode='RGB')
 
-    @classmethod
-    def _get_img_name(cls, img_path):
+    def _get_img_name(self, img_path):
         if not img_path.endswith('.tif'):
             return ''
+        if img_path.split('_')[-4] not in SATELLITE_CHANNELS.keys():
+            return ''
+        self.satellite_type = img_path.split('_')[-4]
+        self.chan_dict = SATELLITE_CHANNELS[self.satellite_type]
+        self.chan_dict_rev = {v: k for k, v in self.chan_dict.items()}
         img_path = img_path[:-4]
-        for n, c in cls.chan_dict.items():
+        for n, c in self.chan_dict.items():
             if img_path.endswith(f'_{c}_{n}'):
                 return img_path[:-2 - len(c) - len(n)]
         return ''
