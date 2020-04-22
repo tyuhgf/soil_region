@@ -25,4 +25,13 @@ deletes the whole polygon.
 ## Make exe
 ```pyi-makespec --onefile map_app.py```
 
+```
+from PyInstaller.utils.hooks import collect_submodules
+from PyInstaller.utils.hooks import collect_data_files
+datas=[('C:/ProgramData/Miniconda3/envs/soil_region/Library/bin/gdal*.dll', 'gdal')] +
+    collect_data_files('scipy') +
+    [("C:\\ProgramData\\Miniconda3\\envs\\soil_region\\Library\\share\\proj\\*", 'proj')],
+hiddenimports=collect_submodules('scipy'),
+```
+
 ```pyinstaller map_app.spec```

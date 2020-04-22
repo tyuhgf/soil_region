@@ -1,5 +1,5 @@
 gdal
 pillow
 numpy
-matplotlib
+matplotlib==3.0.3
 scikit-image

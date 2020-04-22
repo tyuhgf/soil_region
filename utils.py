@@ -1,4 +1,5 @@
 import os
+import sys
 
 import numpy as np
 from tkinter import ttk
@@ -117,3 +118,11 @@ def plot_hist(x):
     plt.savefig(fn, figsize=(380 / dpi, 300 / dpi), dpi=dpi)
     plt.close('all')
     return Image.open(fn).convert('RGB')
+
+
+def load_proj():
+    if getattr(sys, 'frozen', False):  # if we are inside .exe
+        # noinspection PyUnresolvedReferences, PyProtectedMember
+        os.environ['PROJ_LIB'] = os.path.join(sys._MEIPASS, 'proj')
+    # elif sys.platform == 'win32':
+    #     os.environ['PROJ_LIB'] = os.path.join(os.path.split(sys.executable)[0], 'Library', 'share', 'proj')

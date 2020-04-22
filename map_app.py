@@ -9,7 +9,7 @@ from PIL import Image
 import gdal
 
 from region_dialog_window import RegionDialogWindow
-from utils import string_to_value, get_color, SATELLITE_CHANNELS
+from utils import string_to_value, get_color, SATELLITE_CHANNELS, load_proj
 
 from segcanvas.canvas import CanvasImage
 from segcanvas.wrappers import FocusLabelFrame
@@ -236,6 +236,7 @@ class MapImage:
 
 
 if __name__ == '__main__':
+    load_proj()  # for exe file
     _app = tk.Tk()
     MapWindow(_app)
     _app.mainloop()
