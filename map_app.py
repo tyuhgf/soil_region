@@ -33,8 +33,7 @@ class MapWindow:
 
         self.root.bind('<Shift_L>', self.on_shift)
         self.root.bind('<KeyRelease>', self.redraw)
-        self.root.bind('<Control-s>', self.save_file)
-        self.root.bind('<Control-o>', self._load_file)
+        self.root.bind('<Control-KeyPress>', self._ctrl_callback)
 
     def _add_top_menu(self):
         self.top_menu = tk.Frame(self.root, height=60, bg='gray')
@@ -153,6 +152,12 @@ class MapWindow:
             self.region_dialog_window.quit(None)
 
         self.region_dialog_window = RegionDialogWindow(self)
+
+    def _ctrl_callback(self, ev):
+        if ev.keycode == 83:  # s
+            self.save_file(None)
+        if ev.keycode == 79:  # o
+            self._load_file(None)
 
 
 class MapImage:

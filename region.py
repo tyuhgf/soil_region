@@ -40,8 +40,7 @@ class RegionWindow:
         self.root.bind('<KeyRelease>', self.redraw)
         self.root.bind('<space>', self.mode_add_polygon)
         self.root.bind('<Escape>', self.mode_default)
-        self.root.bind('<Control-s>', self.save_file)
-        self.root.bind('<Control-o>', self._load_file)
+        self.root.bind('<Control-KeyPress>', self._ctrl_callback)
 
     def _add_top_menu(self):
         self.top_menu = tk.Frame(self.root, height=60, bg='gray')
@@ -214,6 +213,12 @@ class RegionWindow:
 
     def mode_default(self, ev):
         return self.canvas_image.mode_default(ev)
+
+    def _ctrl_callback(self, ev):
+        if ev.keycode == 83:  # s
+            self.save_file(None)
+        if ev.keycode == 79:  # o
+            self._load_file(None)
 
 
 class RegionImage(CanvasImage):
