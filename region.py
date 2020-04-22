@@ -11,7 +11,7 @@ from PIL import Image, ImageTk
 from skimage.draw import polygon
 
 from segcanvas.canvas import CanvasImage
-from utils import Mask, plot_hist2d, get_color, AugmentedLabelFrame
+from utils import Mask, plot_hist2d, get_color, AugmentedLabelFrame, TabPolygonImage
 
 from segcanvas.wrappers import FocusLabelFrame
 
@@ -69,7 +69,8 @@ class RegionWindow:
         canvas_frame.pack(side=tk.LEFT, fill="both", expand=True, padx=5, pady=5)
         self.canvas = canvas
         self.canvas_frame = canvas_frame
-        self.canvas_image = RegionImage(self.canvas_frame, self.canvas, self)
+        self.canvas_image = RegionImage(self.canvas_frame, self.canvas,
+                                        self.root, self.base_image, self.map_window.colors, self.n_tabs, self)
 
     def _add_tabs(self):
         self.tab_parent = ttk.Notebook(self.root)
@@ -213,225 +214,16 @@ class RegionWindow:
         return self.canvas_image.mode_default(ev)
 
 
-class RegionImage(CanvasImage):
-    def __init__(self, canvas_frame, canvas, region_window):
-        super().__init__(canvas_frame, canvas)
-        self.canvas.bind('<Button-1>', self.__left_mouse_button_pressed)  # move vertex or subdivide edge
-        self.canvas.bind('<Double-Button-1>', self.__left_mouse_double_click)  # delete vertex or polygon
-        self.canvas.bind('<B1-Motion>', self.__left_mouse_moving)  # move vertex or subdivide edge
-        self.canvas.bind('<ButtonRelease-1>', self.__left_mouse_button_released)  # move vertex or subdivide edge
-        self.region_window = region_window
-        self.base_image = region_window.base_image
-        self.base_array = np.array(self.base_image).transpose([1, 0, 2])
+class RegionImage(TabPolygonImage):
+    def __init__(self, canvas_frame, canvas, root, base_image, colors, n_tabs, region_window):
+        super().__init__(canvas_frame, canvas, root, base_image, colors, n_tabs)
+        self._create_mask(region_window)
 
-        self.tab = None
-        self.mode = 'DEFAULT'
-        self.n_tabs = region_window.n_tabs
-        self.rasters = [np.zeros(self.region_window.shape, dtype=int) for _ in range(self.n_tabs)]
-        self.polygons = [[] for _ in range(self.n_tabs)]  # list of polygons for each tab
-        self.movables = [[] for _ in range(self.n_tabs)]  # vertices and centers of edges for polygons of a tab
-        self._last_lb_click_event = None
-        self.__double_click_flag = False
-        self._create_crafted_image(0)
-
-        self._create_mask()
-
-    def to_tab(self, n):
-        self.tab = n
-        self.mode_default(None)
-        self.update_raster(n)
-        self._create_crafted_image(n)
-        self.__show_image()
-        self.region_window.redraw(None)
-
-    def update_raster(self, n):
-        self.rasters[n] = np.zeros(self.region_window.shape, dtype=int)
-        if n > 0:
-            for p in self.polygons[n]:
-                p = np.array(p)
-                rr, cc = polygon(p[:, 0], p[:, 1], self.region_window.shape)
-                self.rasters[n][rr, cc] = n
-        if n == 0:
-            for m in range(1, self.n_tabs):
-                self.rasters[0][self.rasters[m] > 0] = m
-
-    def update_movables(self, n):
-        if n > 0:
-            self.movables[n] = []
-            for k in range(len(self.polygons[n])):
-                p = self.polygons[n][k]
-                for i in range(len(p)):
-                    x, y = tuple(p[i])
-                    x_, y_ = tuple(p[(i + 1) % len(p)])
-                    self.movables[n] += [[x, y, n, k, i, 'vertex'],
-                                         [(x + x_) // 2, (y + y_) // 2, n, k, i, 'edge']]
-
-    def _create_crafted_image(self, n):
-        raster = self.rasters[n][:, ::-1]
-        crafted_image_array = get_color(raster, self.region_window.map_window.colors)
-        if n == 0:
-            crafted_image_array = crafted_image_array * 0.5 + self.base_array * 0.5
-        else:
-            mask = np.array([raster == 0] * 3).transpose([1, 2, 0])
-            crafted_image_array = crafted_image_array * (1 - mask) + self.base_array * mask
-        self.crafted_image = Image.fromarray(crafted_image_array.astype('uint8').transpose(1, 0, 2))
-
-    def mode_add_polygon(self, _ev):
-        if self.tab > 0:
-            self.mode = 'ADD'
-
-            if len(self.polygons[self.tab]) > 0 and len(self.polygons[self.tab][-1]) < 3:
-                self.polygons[self.tab].pop(-1)
-                self.update_movables(self.tab)
-
-            self.polygons[self.tab].append([])
-
-    def mode_default(self, _ev):
-        self.mode = 'DEFAULT'
-        if len(self.polygons[self.tab]) > 0 and len(self.polygons[self.tab][-1]) < 3:
-            self.polygons[self.tab].pop(-1)
-            self.update_movables(self.tab)
-            self.update_raster(self.tab)
-            self._create_crafted_image(self.tab)
-
-            self.patch_image(self.crafted_image)
-
-    def __left_mouse_button_released(self, event):
-        if self.__double_click_flag:
-            return
-        self.region_window.root.after(300, self.__left_mouse_moving, event)
-
-    def __left_mouse_moving(self, event):
-        if self.__double_click_flag:
-            self.__double_click_flag = False
-            return
-
-        coords = self._get_click_coordinates(event)
-        if coords is None:
-            return
-        ev = self._last_lb_click_event
-
-        if self.mode == 'DEFAULT':
-            if coords is not None and self.tab is not None and self.tab > 0 and ev is not None:
-                _coords_old = [ev[0], ev[1]]
-                n, k, i, type_ = tuple(ev[2:])
-                if type_ == 'vertex':
-                    self.polygons[n][k][i] = [coords[0], coords[1]]
-                if type_ == 'edge':
-                    self.polygons[n][k].insert(i + 1, [coords[0], coords[1]])
-                    self._last_lb_click_event = [coords[0], coords[1], n, k, i + 1, 'vertex']
-
-        elif self.mode == 'ADD':
-            self.polygons[self.tab][-1][-1] = [coords[0], coords[1]]
-
-        self.update_movables(self.tab)
-        self.update_raster(self.tab)
-        self._create_crafted_image(self.tab)
-        self.patch_image(self.crafted_image)
-
-    def __left_mouse_button_pressed(self, event):
-        coords = self._get_click_coordinates(event)
-        if coords is None:
-            return
-
-        if self.mode == 'DEFAULT':
-            if self.tab is not None and self.tab > 0:
-                self._last_lb_click_event = self._find_nearest(self.tab,
-                                                               [coords[0], coords[1]])
-        elif self.tab > 0 and self.mode == 'ADD':
-            self.polygons[self.tab][-1].append([coords[0], coords[1]])
-
-        self.__show_image()
-
-    def __left_mouse_double_click(self, event):
-        self.__double_click_flag = True
-
-        coords = self._get_click_coordinates(event)
-
-        if coords is not None and self.tab is not None and self.tab > 0:
-            nearest = self._find_nearest(self.tab, coords)
-            if nearest is not None:
-                n, k, i, type_ = tuple(nearest[2:])
-                if type_ == 'vertex':
-                    self.polygons[n][k].pop(i)
-                    if len(self.polygons[n][k]) < 3:
-                        self.polygons[n].pop(k)
-                if type_ == 'edge':
-                    self.polygons[n].pop(k)
-
-        self.update_movables(self.tab)
-        self.update_raster(self.tab)
-        self._create_crafted_image(self.tab)
-        self.patch_image(self.crafted_image)
-
-    def _find_nearest(self, n, coords):
-        if len(self.movables[n]) == 0:
-            return None
-        i = np.argmin([(p[0] - coords[0]) ** 2 + (p[1] - coords[1]) ** 2 for p in self.movables[n]])
-        i = int(i)
-        p = self.movables[n][i]
-        if (p[0] - coords[0]) ** 2 + (p[1] - coords[1]) ** 2 > 5 ** 2:
-            return None
-        return self.movables[n][i]
-
-    def _get_click_coordinates(self, event):
-        res = super()._get_click_coordinates(event)
-        if res is not None:
-            return res[0], self.region_window.shape[1] - res[1]
-        return None
-
-    def __show_image(self):
-        # noinspection PyUnresolvedReferences, PyProtectedMember
-        super()._CanvasImage__show_image()
-        self.canvas.delete('polygons')
-
-        box_image = self.canvas.coords(self.container)
-        for p in self.polygons[self.tab]:
-            for i in range(len(p)):
-                x, y = tuple(p[i])
-                y = self.region_window.shape[1] - y
-
-                x *= self.real_scale[0]
-                y *= self.real_scale[1]
-
-                x += box_image[0]
-                y += box_image[1]
-
-                x_, y_ = tuple(p[(i + 1) % len(p)])
-                y_ = self.region_window.shape[1] - y_
-
-                x_ *= self.real_scale[0]
-                y_ *= self.real_scale[1]
-
-                x_ += box_image[0]
-                y_ += box_image[1]
-                self.canvas.create_line(x, y, x_, y_, fill="#FADADD", width=3, tags='polygons')
-                self.canvas.create_oval((x + x_) // 2 - 3, (y + y_) // 2 - 3, (x + x_) // 2 + 3, (y + y_) // 2 + 3,
-                                        outline="#EFDECD", width=3, tags='polygons')
-
-        for p in self.polygons[self.tab]:
-            for i in range(len(p)):
-                x, y = tuple(p[i])
-                y = self.region_window.shape[1] - y
-
-                x *= self.real_scale[0]
-                y *= self.real_scale[1]
-
-                x += box_image[0]
-                y += box_image[1]
-
-                self.canvas.create_oval(x - 5, y - 5, x + 5, y + 5, outline="#EFDECD", width=3, tags='polygons')
-
-    def patch_image(self, image):
-        super().patch_image(image)
-        self.__show_image()
-
-    def _create_mask(self):
-        x_min, x_max = self.region_window.hist[1][0], self.region_window.hist[1][-1]
-        x_step = self.region_window.hist[1][1] - self.region_window.hist[1][0]
-        y_min, y_max = self.region_window.hist[2][0], self.region_window.hist[2][-1]
-        y_step = self.region_window.hist[2][1] - self.region_window.hist[2][0]
-        channels = self.region_window.map_window.channels_region
+    def _create_mask(self, region_window):
+        x_min, x_max = region_window.hist[1][0], region_window.hist[1][-1]
+        x_step = region_window.hist[1][1] - region_window.hist[1][0]
+        y_min, y_max = region_window.hist[2][0], region_window.hist[2][-1]
+        y_step = region_window.hist[2][1] - region_window.hist[2][0]
+        channels = region_window.map_window.channels_region
         array = self.rasters[0]
         self.mask = Mask(x_min, x_max, x_step, y_min, y_max, y_step, array, channels)
-        pass

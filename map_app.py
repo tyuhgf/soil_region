@@ -1,4 +1,5 @@
 import tkinter as tk
+from tkinter import ttk
 import tkinter.filedialog as tk_filedialog
 
 import os.path
@@ -9,9 +10,8 @@ from PIL import Image
 import gdal
 
 from region_dialog_window import RegionDialogWindow
-from utils import string_to_value, get_color, SATELLITE_CHANNELS
+from utils import string_to_value, get_color, SATELLITE_CHANNELS, TabPolygonImage
 
-from segcanvas.canvas import CanvasImage
 from segcanvas.wrappers import FocusLabelFrame
 
 
@@ -41,7 +41,9 @@ class MapWindow:
         self.load_btn = tk.Button(self.top_menu, text='Load\nImage')
         self.save_btn = tk.Button(self.top_menu, text='Save\nImage')
         self.quit_btn = tk.Button(self.top_menu, text='Quit')
-        self.to_region_btn = tk.Button(self.top_menu, text='Draw\nRegion')
+        self.draw_reg_btn = ttk.Button(self.top_menu, text='Draw region')
+        self.upd_reg_btn = ttk.Button(self.top_menu, text='Update')
+        self.to_region_btn = tk.Button(self.top_menu, text='View\nHist')
         self.slider = tk.Scale(self.top_menu, from_=1, to=42, orient='horizontal',
                                command=self._delayed_reload_channels)
         self.slider.set(10)
@@ -49,11 +51,15 @@ class MapWindow:
         self.load_btn.bind("<Button-1>", self._load_file)
         self.save_btn.bind("<Button-1>", self.save_file)
         self.quit_btn.bind("<Button-1>", self.quit)
+        self.draw_reg_btn.bind("<Button-1>", self._draw_region)
+        # self.upd_reg_btn.bind("<Button-1>", self._update_region_window)
         self.to_region_btn.bind("<Button-1>", self._open_region_dialog_window)
 
         self.load_btn.place(x=10, y=10, width=40, height=40)
         self.save_btn.place(x=60, y=10, width=40, height=40)
         self.quit_btn.place(x=110, y=10, width=40, height=40)
+        self.draw_reg_btn.place(x=-120, y=10, relx=1, width=65, height=20)
+        self.upd_reg_btn.place(x=-120, y=30, relx=1, width=65, height=20)
         self.to_region_btn.place(x=-50, y=10, relx=1, width=40, height=40)
         self.slider.place(x=270, y=10)
 
@@ -74,11 +80,23 @@ class MapWindow:
         canvas_frame.pack(side=tk.LEFT, fill="both", expand=True, padx=5, pady=5)
         self.canvas = canvas
         self.canvas_frame = canvas_frame
-        self.canvas_image = CanvasImage(self.canvas_frame, self.canvas)
+        self.canvas_image = TabPolygonImage(self.canvas_frame, self.canvas, self.root,
+                                            Image.fromarray(np.zeros([80, 80, 3]), mode='RGB'), self.colors, 2)
+        self.canvas_image.tab = 0
 
     def quit(self, _ev=None):
         if messagebox.askyesno(title="Quit?", message="Closing app may cause data loss."):
             self.root.destroy()
+
+    def _draw_region(self, _ev=None):
+        if str(self.upd_reg_btn['state']) == 'normal':
+            self.upd_reg_btn.configure(state='disabled')
+            self.draw_reg_btn.configure(relief=tk.SUNKEN)  # todo
+            self.canvas_image.to_tab(1)
+        else:
+            self.upd_reg_btn.configure(state='normal')
+            self.draw_reg_btn.configure(relief=tk.RAISED)
+            self.canvas_image.to_tab(0)
 
     def _delayed_reload_channels(self, _ev):
         if not hasattr(self, '_job'):
@@ -222,4 +240,3 @@ if __name__ == '__main__':
     _app = tk.Tk()
     MapWindow(_app)
     _app.mainloop()
-    pass
