@@ -21,8 +21,8 @@ class RegionWindow:
         self.app = map_window.app
         self.root = tk.Toplevel(self.app)
         self.root.protocol("WM_DELETE_WINDOW", self.quit)
-        self.root.title('Region')
-        self.root.geometry("%dx%d%+d%+d" % (600, 600, 500, 100))
+        self.root.title('SoilRegion (Region)')
+        self.root.geometry("%dx%d%+d%+d" % (900, 900, 500, 100))
         self.map_window = map_window
         self.hist = hist
 
@@ -36,10 +36,12 @@ class RegionWindow:
         self.canvas_image.reload_image(self.base_image)
         self._load_colors(load_path='colors.json')
 
-        self.root.bind('<Control_L>', self.on_ctrl)
+        self.root.bind('<Shift_L>', self.on_shift)
         self.root.bind('<KeyRelease>', self.redraw)
         self.root.bind('<space>', self.mode_add_polygon)
         self.root.bind('<Escape>', self.mode_default)
+        self.root.bind('<Control-s>', self.save_file)
+        self.root.bind('<Control-o>', self._load_file)
 
     def _add_top_menu(self):
         self.top_menu = tk.Frame(self.root, height=60, bg='gray')
@@ -147,7 +149,7 @@ class RegionWindow:
 
     def _load_file(self, _ev):
         load_path = tk_filedialog.Open(self.root, filetypes=[('', '*.json')]).show()
-        if load_path == '':
+        if not isinstance(load_path, str) or load_path == '':
             return
         x_min, x_max = self.hist[1][0], self.hist[1][-1]
         x_step = self.hist[1][1] - self.hist[1][0]
@@ -170,7 +172,8 @@ class RegionWindow:
         self.canvas_image.to_tab(0)
 
     def save_file(self, _ev):
-        fn = tk_filedialog.SaveAs(self.root, initialfile='region.json', filetypes=[('*.json files', '*.json')]).show()
+        fn = tk_filedialog.SaveAs(self.root, initialfile=f'{self.map_window.img_name}_region.json',
+                                  filetypes=[('*.json files', '*.json')]).show()
         if fn == '':
             return
         if not fn.endswith('.json'):
@@ -191,14 +194,14 @@ class RegionWindow:
             'polygons': self.canvas_image.polygons
         }, open(fn, 'w'), indent=4)
 
-    def on_ctrl(self, _arg):
+    def on_shift(self, _arg):
         self.canvas_image.patch_image(self.base_image)
 
     def redraw(self, _arg):
         if self.canvas_image.crafted_image is not None:
             self.canvas_image.patch_image(self.canvas_image.crafted_image)
         else:
-            self.on_ctrl(None)
+            self.on_shift(None)
 
     def redraw_map_window(self, _arg):
         self.canvas_image.mask.update_array(self.canvas_image.rasters[self.canvas_image.tab])

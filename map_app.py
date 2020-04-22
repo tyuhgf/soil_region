@@ -20,8 +20,8 @@ class MapWindow:
         self.app = app
         self.root = app
         self.root.protocol("WM_DELETE_WINDOW", self.quit)
-        self.root.title('Map')
-        self.root.geometry("%dx%d%+d%+d" % (700, 700, 100, 100))
+        self.root.title('SoilRegion (Map)')
+        self.root.geometry("%dx%d%+d%+d" % (1200, 900, 100, 100))
 
         self.channels_img = ['07', '04', '02']
         self.n_regions = 5
@@ -31,8 +31,10 @@ class MapWindow:
         self._add_canvas_frame()
         self.map_image = MapImage(self.colors)
 
-        self.root.bind('<Control_L>', self.on_ctrl)
+        self.root.bind('<Shift_L>', self.on_shift)
         self.root.bind('<KeyRelease>', self.redraw)
+        self.root.bind('<Control-s>', self.save_file)
+        self.root.bind('<Control-o>', self._load_file)
 
     def _add_top_menu(self):
         self.top_menu = tk.Frame(self.root, height=60, bg='gray')
@@ -42,9 +44,9 @@ class MapWindow:
         self.save_btn = tk.Button(self.top_menu, text='Save\nImage')
         self.quit_btn = tk.Button(self.top_menu, text='Quit')
         self.to_region_btn = tk.Button(self.top_menu, text='Draw\nRegion')
-        self.slider = tk.Scale(self.top_menu, from_=1, to=42, orient='horizontal',
+        self.slider = tk.Scale(self.top_menu, from_=-3, to=3, resolution=.1, orient='horizontal',
                                command=self._delayed_reload_channels)
-        self.slider.set(10)
+        self.slider.set(0)
 
         self.load_btn.bind("<Button-1>", self._load_file)
         self.save_btn.bind("<Button-1>", self.save_file)
@@ -101,18 +103,21 @@ class MapWindow:
 
     def _load_file(self, _ev):
         img_path = tk_filedialog.Open(self.root, filetypes=[('*.tif files', '*.tif')]).show()
-        if img_path != '':
+        if isinstance(img_path, str) and img_path != '':
             if hasattr(self, 'region_window'):
                 self.region_window.quit(None)
             if hasattr(self, 'region_dialog_window'):
                 self.region_dialog_window.quit(None)
             self.map_image.load(img_path)
+            self.img_name = self.map_image.img_name
+            self.root.title(f'{self.img_name} - SoilRegion (Map)')
             self.reload_channels(channels=[self.map_image.chan_dict_rev[c] for c in ['swir2', 'nir', 'green']])
             self.map_image.create_original_img(self.channels_img, self.slider.get())
             self.canvas_image.reload_image(self.map_image.original_image, True)
 
     def save_file(self, _ev):
-        fn = tk_filedialog.SaveAs(self.root, filetypes=[('*.tif files', '*.tif')]).show()
+        fn = tk_filedialog.SaveAs(self.root, initialfile=f'{self.img_name}_mask.tif',
+                                  filetypes=[('*.tif files', '*.tif')]).show()
         if fn == '':
             return
         if not fn.endswith('.tif'):
@@ -128,7 +133,7 @@ class MapWindow:
         outdata.GetRasterBand(1).WriteArray(types)
         outdata.FlushCache()  # saves to disk
 
-    def on_ctrl(self, _arg):
+    def on_shift(self, _arg):
         if self.map_image.original_image is not None:
             self.canvas_image.patch_image(self.map_image.original_image)
 
@@ -136,7 +141,7 @@ class MapWindow:
         if self.map_image.filtered_image is not None:
             self.canvas_image.patch_image(self.map_image.filtered_image)
         else:
-            self.on_ctrl(None)
+            self.on_shift(None)
 
     def _open_region_dialog_window(self, _arg):
         if hasattr(self, 'region_window'):
@@ -159,6 +164,7 @@ class MapImage:
         self.original_array = None
         self.filtered_image = None
         self.meta_dict = None
+        self.img_name = None
 
     def load_band(self, b, img_path):
         if not os.path.isfile(img_path):
@@ -171,13 +177,14 @@ class MapImage:
         self.meta_dict = {'geotransform': ds.GetGeoTransform(), 'projection': ds.GetProjection()}
 
     def load(self, img_path):
-        img_name = self._get_img_name(img_path)
+        img_prefix = self._get_img_name(img_path)
+        self.img_name = img_prefix.split('/')[-1]
         self.bands = dict()
-        if img_name != '':
+        if img_prefix != '':
             for n, c in self.chan_dict.items():
-                self.load_band(c, f'{img_name}_{c}_{n}.tif')
+                self.load_band(c, f'{img_prefix}_{c}_{n}.tif')
 
-    def create_original_img(self, b, r=1):
+    def create_original_img(self, b, r=0):
         arrays = [self.bands[self.chan_dict[c]].copy() for c in b]
         if len(arrays) == 1:
             arrays *= 3
@@ -187,11 +194,16 @@ class MapImage:
 
         for i in range(3):
             arrays[i] -= arrays[i].mean()
-            arrays[i] /= np.mean(arrays[i] ** 2)
-            arrays[i][arrays[i] < -r] = -r
-            arrays[i][arrays[i] > r] = r
+            arrays[i] /= np.mean(arrays[i] ** 2) ** .5
+            bounds = np.quantile(arrays[i].flatten(), .01) * .99, np.quantile(arrays[i].flatten(), .99) * .99
+            _arr = arrays[i][(bounds[0] < arrays[i]) * (arrays[i] < bounds[1])]
+            rr = np.quantile(_arr, .05) / 2 ** r, np.quantile(_arr, .95) / 2 ** r
+            arrays[i][arrays[i] < rr[0]] = rr[0]
+            arrays[i][arrays[i] > rr[1]] = rr[1]
+            arrays[i] -= arrays[i].mean()
+            arrays[i] /= np.mean(arrays[i] ** 2) ** .5
             arrays[i] = ((arrays[i] - arrays[i].min()) / (arrays[i].max() - arrays[i].min()) * 255).astype('uint8')
-        # self.original_image = misc.toimage(np.array(arrays))
+            # arrays[i] = ((arrays[i] - rr[0]) / (rr[1] - rr[0]) * 255).astype('uint8')
         self.original_image = Image.fromarray(np.array(arrays).transpose([1, 2, 0]), mode='RGB')
         self.original_array = np.array(self.original_image)
 
