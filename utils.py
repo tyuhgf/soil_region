@@ -12,6 +12,14 @@ from matplotlib.colors import LinearSegmentedColormap, hsv_to_rgb
 TMP_FOLDER = gettempdir()  # '/tmp/' if sys.platform == 'linux' else 'C:\\Temp\\'
 
 SATELLITE_CHANNELS = {
+    'LT04': {
+        '01': 'blue',
+        '02': 'green',
+        '03': 'red',
+        '04': 'nir',
+        '05': 'swir1',
+        '07': 'swir2'
+    },
     'LT05': {
         '01': 'blue',
         '02': 'green',
