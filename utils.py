@@ -120,9 +120,28 @@ def plot_hist(x):
     return Image.open(fn).convert('RGB')
 
 
+class Keycode2Char:
+    linux_table = {39: 's', 32: 'o', 36: 'enter', 19: '0'}
+    linux_table.update({9 + n: str(n) for n in range(1, 10)})
+
+    win_table = {83: 's', 79: 'o', 13: 'enter'}
+    win_table.update({48 + n: str(n) for n in range(10)})
+
+    @classmethod
+    def __call__(cls, n):
+        if sys.platform == 'linux':
+            return cls.linux_table[n]
+        if sys.platform == 'win32':
+            return cls.win_table[n]
+        raise Exception('Platform unknown')
+
+
 def load_proj():
     if getattr(sys, 'frozen', False):  # if we are inside .exe
         # noinspection PyUnresolvedReferences, PyProtectedMember
         os.environ['PROJ_LIB'] = os.path.join(sys._MEIPASS, 'proj')
     # elif sys.platform == 'win32':
     #     os.environ['PROJ_LIB'] = os.path.join(os.path.split(sys.executable)[0], 'Library', 'share', 'proj')
+
+
+keycode2char = Keycode2Char()

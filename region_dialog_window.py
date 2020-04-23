@@ -5,7 +5,7 @@ from PIL.ImageTk import PhotoImage
 from region import RegionWindow
 from segcanvas.canvas import CanvasImage
 from segcanvas.wrappers import FocusLabelFrame
-from utils import string_to_value, plot_hist2d, plot_hist
+from utils import string_to_value, plot_hist2d, plot_hist, keycode2char
 
 
 class RegionDialogWindow:
@@ -28,6 +28,8 @@ class RegionDialogWindow:
         self._add_left_menu()
         self._add_preview()
         self._reload_hist()
+
+        self.root.bind('<Control-KeyPress>', self._ctrl_callback)
 
     def _add_top_menu(self):
         self.top_menu = tk.Frame(self.root, height=60, bg='gray')
@@ -113,6 +115,10 @@ class RegionDialogWindow:
         self.canvas = canvas
         self.canvas_frame = canvas_frame
         self.canvas_image = CanvasImage(self.canvas_frame, self.canvas)
+
+    def _ctrl_callback(self, ev):
+        if keycode2char(ev.keycode) == 'enter':
+            self.open_region_window(None)
 
     def _reload_hist(self, _ev=None):
         for i in range(2):

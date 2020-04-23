@@ -11,7 +11,7 @@ from PIL import Image, ImageTk
 from skimage.draw import polygon
 
 from segcanvas.canvas import CanvasImage
-from utils import Mask, plot_hist2d, get_color, AugmentedLabelFrame
+from utils import Mask, plot_hist2d, get_color, AugmentedLabelFrame, keycode2char
 
 from segcanvas.wrappers import FocusLabelFrame
 
@@ -215,10 +215,16 @@ class RegionWindow:
         return self.canvas_image.mode_default(ev)
 
     def _ctrl_callback(self, ev):
-        if ev.keycode == 83:  # s
+        key = keycode2char(ev.keycode)
+        if key == 's':
             self.save_file(None)
-        if ev.keycode == 79:  # o
+        if key == 'o':
             self._load_file(None)
+        if key == 'enter':
+            self.redraw_map_window(None)
+        if key in map(str, range(self.n_tabs)):
+            self.tab_parent.select(int(key))
+            # self.canvas_image.to_tab(int(key))
 
 
 class RegionImage(CanvasImage):

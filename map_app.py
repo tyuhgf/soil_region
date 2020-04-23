@@ -9,7 +9,7 @@ from PIL import Image
 import gdal
 
 from region_dialog_window import RegionDialogWindow
-from utils import string_to_value, get_color, SATELLITE_CHANNELS, load_proj
+from utils import string_to_value, get_color, SATELLITE_CHANNELS, load_proj, keycode2char
 
 from segcanvas.canvas import CanvasImage
 from segcanvas.wrappers import FocusLabelFrame
@@ -154,10 +154,12 @@ class MapWindow:
         self.region_dialog_window = RegionDialogWindow(self)
 
     def _ctrl_callback(self, ev):
-        if ev.keycode == 83:  # s
+        if keycode2char(ev.keycode) == 's':
             self.save_file(None)
-        if ev.keycode == 79:  # o
+        if keycode2char(ev.keycode) == 'o':
             self._load_file(None)
+        if keycode2char(ev.keycode) == 'enter':
+            self._open_region_dialog_window(None)
 
 
 class MapImage:
