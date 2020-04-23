@@ -138,10 +138,14 @@ class Keycode2Char:
     @classmethod
     def __call__(cls, n):
         if sys.platform == 'linux':
-            return cls.linux_table[n]
-        if sys.platform == 'win32':
-            return cls.win_table[n]
-        raise Exception('Platform unknown')
+            table = cls.linux_table
+        elif sys.platform == 'win32':
+            table = cls.win_table
+        else:
+            raise Exception('Platform unknown')
+        if n in table:
+            return table[n]
+        return ''
 
 
 def load_proj():
