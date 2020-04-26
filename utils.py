@@ -134,10 +134,10 @@ def plot_hist(x):
 class TabPolygonImage(CanvasImage):
     def __init__(self, canvas_frame, canvas, root, base_image, colors, n_tabs):
         super().__init__(canvas_frame, canvas)
-        self.canvas.bind('<Button-1>', self.__left_mouse_button_pressed)  # move vertex or subdivide edge
-        self.canvas.bind('<Double-Button-1>', self.__left_mouse_double_click)  # delete vertex or polygon
-        self.canvas.bind('<B1-Motion>', self.__left_mouse_moving)  # move vertex or subdivide edge
-        self.canvas.bind('<ButtonRelease-1>', self.__left_mouse_button_released)  # move vertex or subdivide edge
+        self.canvas.bind('<Button-1>', self._left_mouse_button_pressed)  # move vertex or subdivide edge
+        self.canvas.bind('<Double-Button-1>', self._left_mouse_double_click)  # delete vertex or polygon
+        self.canvas.bind('<B1-Motion>', self._left_mouse_moving)  # move vertex or subdivide edge
+        self.canvas.bind('<ButtonRelease-1>', self._left_mouse_button_released)  # move vertex or subdivide edge
         self.base_image = base_image
         self.base_array = np.array(self.base_image).transpose([1, 0, 2])
         self.shape = self.base_array.shape[:2]
@@ -224,12 +224,12 @@ class TabPolygonImage(CanvasImage):
 
             self.patch_image(self.crafted_image)
 
-    def __left_mouse_button_released(self, event):
+    def _left_mouse_button_released(self, event):
         if self.__double_click_flag:
             return
-        self.root.after(300, self.__left_mouse_moving, event)
+        self.root.after(300, self._left_mouse_moving, event)
 
-    def __left_mouse_moving(self, event):
+    def _left_mouse_moving(self, event):
         if self.__double_click_flag:
             self.__double_click_flag = False
             return
@@ -257,7 +257,7 @@ class TabPolygonImage(CanvasImage):
         self._create_crafted_image(self.tab)
         self.patch_image(self.crafted_image)
 
-    def __left_mouse_button_pressed(self, event):
+    def _left_mouse_button_pressed(self, event):
         coords = self._get_click_coordinates(event)
         if coords is None:
             return
@@ -271,7 +271,7 @@ class TabPolygonImage(CanvasImage):
 
         self.__show_image()
 
-    def __left_mouse_double_click(self, event):
+    def _left_mouse_double_click(self, event):
         self.__double_click_flag = True
 
         coords = self._get_click_coordinates(event)

@@ -218,6 +218,22 @@ class MapWindow:
 
 
 class MapTabImage(TabPolygonImage):
+    def _left_mouse_button_pressed(self, event):
+        if self.tab != 0:
+            return super()._left_mouse_button_pressed(event)
+
+    def _left_mouse_double_click(self, event):
+        if self.tab != 0:
+            return super()._left_mouse_double_click(event)
+
+    def _left_mouse_button_released(self, event):
+        if self.tab != 0:
+            return super()._left_mouse_button_released(event)
+
+    def _left_mouse_moving(self, event):
+        if self.tab != 0:
+            return super()._left_mouse_moving(event)
+
     def _create_crafted_image(self, n):
         raster = self.rasters[n][:, ::-1]
         crafted_image_array = get_color(raster, self.colors)

@@ -20,7 +20,7 @@ class HistogramWindow:
         self.root = tk.Toplevel(self.app)
         self.root.protocol("WM_DELETE_WINDOW", self.quit)
         self.root.title('SoilRegion (Region)')
-        self.root.geometry("%dx%d%+d%+d" % (900, 900, 500, 100))
+        self.root.geometry("%dx%d%+d%+d" % (900, 900, 1000, 100))
         self.map_window = map_window
         self.hist = hist
 
