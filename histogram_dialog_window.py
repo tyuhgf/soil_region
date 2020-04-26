@@ -2,13 +2,13 @@ import tkinter as tk
 import numpy as np
 from PIL.ImageTk import PhotoImage
 
-from region import RegionWindow
+from histogram_window import HistogramWindow
 from segcanvas.canvas import CanvasImage
 from segcanvas.wrappers import FocusLabelFrame
 from utils import string_to_value, plot_hist2d, plot_hist
 
 
-class RegionDialogWindow:
+class HistogramDialogWindow:
     def __init__(self, map_window):
         self.map_window = map_window
         self.map_image = map_window.map_image
@@ -17,8 +17,8 @@ class RegionDialogWindow:
         self.root.title('Preview')
         self.root.geometry("%dx%d%+d%+d" % (1200, 900, 500, 100))
 
-        self.channels_region = [self.map_window.map_image.chan_dict_rev[c] for c in ['red', 'nir']]
-        self.steps = [300, 300]
+        self.map_window.channels_histogram = [self.map_image.chan_dict_rev[c] for c in ['red', 'nir']]
+        self.steps = self.map_window.steps
 
         self.graph_x_img = None
         self.graph_y_img = None
@@ -33,10 +33,10 @@ class RegionDialogWindow:
         self.top_menu = tk.Frame(self.root, height=60, bg='gray')
         self.top_menu.pack(side='top', fill='x')
 
-        self.to_region_btn = tk.Button(self.top_menu, text='OK')
-        self.to_region_btn.bind("<Button-1>", self.open_region_window)
+        self.to_histogram_btn = tk.Button(self.top_menu, text='OK')
+        self.to_histogram_btn.bind("<Button-1>", self.open_histogram_window)
 
-        self.to_region_btn.place(x=-50, y=10, relx=1, width=40, height=40)
+        self.to_histogram_btn.place(x=-50, y=10, relx=1, width=40, height=40)
 
         self.ch_stringvars = [tk.StringVar() for _ in range(2)]
         self.ch_entries = [tk.Entry(self.top_menu, textvariable=v) for v in self.ch_stringvars]
@@ -46,7 +46,7 @@ class RegionDialogWindow:
             l.place(x=10 + 30 * i, y=10, width=25, height=10)
             e.place(x=10 + 30 * i, y=22, width=25)
             e.delete(0, -1)
-            e.insert(0, int(self.channels_region[i]))
+            e.insert(0, int(self.map_window.channels_histogram[i]))
             e.bind('<Return>', self.reload_graphs)
 
         self.steps_stringvars = [tk.StringVar() for _ in range(2)]
@@ -61,7 +61,7 @@ class RegionDialogWindow:
             e.bind('<Return>', self.reload_graphs)
 
     def _calc_ranges(self, _ev=None):
-        values = [self.map_image.bands[self.map_image.chan_dict[c]].copy() for c in self.channels_region]
+        values = [self.map_image.bands[self.map_image.chan_dict[c]].copy() for c in self.map_window.channels_histogram]
         self.x_range, self.y_range = ([values[i].min(), values[i].max()] for i in range(2))
 
         for i in range(2):
@@ -128,7 +128,7 @@ class RegionDialogWindow:
             self.steps_entries[i].delete(0, 'end')
             self.steps_entries[i].insert(0, self.steps[i])
 
-        values = [self.map_image.bands[self.map_image.chan_dict[c]] for c in self.channels_region]
+        values = [self.map_image.bands[self.map_image.chan_dict[c]] for c in self.map_window.channels_histogram]
         self.hist = np.histogram2d(values[0].flatten(), values[1].flatten(),
                                    bins=self.steps,
                                    range=[self.x_range, self.y_range])
@@ -143,9 +143,10 @@ class RegionDialogWindow:
             self.steps_entries[i].delete(0, 'end')
             self.steps_entries[i].insert(0, self.steps[i])
         for i in range(2):
-            self.channels_region[i] = string_to_value(self.ch_entries[i].get(), 'int_to_str') or self.channels_region[i]
+            self.map_window.channels_histogram[i] = string_to_value(self.ch_entries[i].get(), 'int_to_str') \
+                                                 or self.map_window.channels_histogram[i]
             self.ch_entries[i].delete(0, 'end')
-            self.ch_entries[i].insert(0, int(self.channels_region[i]))
+            self.ch_entries[i].insert(0, int(self.map_window.channels_histgram[i]))
 
         self._calc_ranges()
         self._reload_hist()
@@ -155,9 +156,10 @@ class RegionDialogWindow:
         self.graph_x_frame['image'] = self.graph_x_img
         self.graph_y_frame['image'] = self.graph_y_img
 
-    def open_region_window(self, _ev):
-        self.map_window.channels_region = self.channels_region
-        self.map_window.region_window = RegionWindow(self.map_window, self.hist, self.base_image)
+    def open_histogram_window(self, _ev):
+        self.map_window.add_histogram_window(HistogramWindow(self.map_window, self.hist, self.base_image))
+        self.map_window.steps = self.steps
+        self.map_window.range = [self.x_range, self.y_range]
         self.quit()
 
     def quit(self, _ev=None):

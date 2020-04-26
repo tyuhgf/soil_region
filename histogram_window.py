@@ -8,20 +8,18 @@ from tkinter.messagebox import showwarning
 
 import numpy as np
 from PIL import Image, ImageTk
-from skimage.draw import polygon
 
-from segcanvas.canvas import CanvasImage
-from utils import Mask, plot_hist2d, get_color, AugmentedLabelFrame, TabPolygonImage
+from utils import Mask, plot_hist2d, AugmentedLabelFrame, TabPolygonImage
 
 from segcanvas.wrappers import FocusLabelFrame
 
 
-class RegionWindow:
+class HistogramWindow:
     def __init__(self, map_window, hist, base_image=None):
         self.app = map_window.app
         self.root = tk.Toplevel(self.app)
         self.root.protocol("WM_DELETE_WINDOW", self.quit)
-        self.root.title('Region')
+        self.root.title('Histogram')
         self.root.geometry("%dx%d%+d%+d" % (600, 600, 500, 100))
         self.map_window = map_window
         self.hist = hist
@@ -69,8 +67,8 @@ class RegionWindow:
         canvas_frame.pack(side=tk.LEFT, fill="both", expand=True, padx=5, pady=5)
         self.canvas = canvas
         self.canvas_frame = canvas_frame
-        self.canvas_image = RegionImage(self.canvas_frame, self.canvas,
-                                        self.root, self.base_image, self.map_window.colors, self.n_tabs, self)
+        self.canvas_image = HistogramImage(self.canvas_frame, self.canvas,
+                                           self.root, self.base_image, self.map_window.colors, self.n_tabs, self)
 
     def _add_tabs(self):
         self.tab_parent = ttk.Notebook(self.root)
@@ -141,7 +139,7 @@ class RegionWindow:
 
     def quit(self, _ev=None):
         if messagebox.askyesno(title="Quit?", message="Closing window may cause data loss."):
-            delattr(self.map_window, 'region_window')
+            delattr(self.map_window, 'histogram_window')
             self.map_window.map_image.filtered_image = None
             self.root.destroy()
             del self
@@ -154,7 +152,7 @@ class RegionWindow:
         x_step = self.hist[1][1] - self.hist[1][0]
         y_min, y_max = self.hist[2][0], self.hist[2][-1]
         y_step = self.hist[2][1] - self.hist[2][0]
-        channels = self.map_window.channels_region
+        channels = self.map_window.channels_histogram
 
         q = json.load(open(load_path, 'r'))
         if q['channels'] != channels:
@@ -180,7 +178,7 @@ class RegionWindow:
         x_step = self.hist[1][1] - self.hist[1][0]
         y_min, y_max = self.hist[2][0], self.hist[2][-1]
         y_step = self.hist[2][1] - self.hist[2][0]
-        channels = self.map_window.channels_region
+        channels = self.map_window.channels_histogram
         json.dump({
             'channels': channels,
             'x_min': x_min,
@@ -214,16 +212,16 @@ class RegionWindow:
         return self.canvas_image.mode_default(ev)
 
 
-class RegionImage(TabPolygonImage):
-    def __init__(self, canvas_frame, canvas, root, base_image, colors, n_tabs, region_window):
+class HistogramImage(TabPolygonImage):
+    def __init__(self, canvas_frame, canvas, root, base_image, colors, n_tabs, histogram_window):
         super().__init__(canvas_frame, canvas, root, base_image, colors, n_tabs)
-        self._create_mask(region_window)
+        self._create_mask(histogram_window)
 
-    def _create_mask(self, region_window):
-        x_min, x_max = region_window.hist[1][0], region_window.hist[1][-1]
-        x_step = region_window.hist[1][1] - region_window.hist[1][0]
-        y_min, y_max = region_window.hist[2][0], region_window.hist[2][-1]
-        y_step = region_window.hist[2][1] - region_window.hist[2][0]
-        channels = region_window.map_window.channels_region
+    def _create_mask(self, histogram_window):
+        x_min, x_max = histogram_window.hist[1][0], histogram_window.hist[1][-1]
+        x_step = histogram_window.hist[1][1] - histogram_window.hist[1][0]
+        y_min, y_max = histogram_window.hist[2][0], histogram_window.hist[2][-1]
+        y_step = histogram_window.hist[2][1] - histogram_window.hist[2][0]
+        channels = histogram_window.map_window.channels_histogram
         array = self.rasters[0]
         self.mask = Mask(x_min, x_max, x_step, y_min, y_max, y_step, array, channels)
