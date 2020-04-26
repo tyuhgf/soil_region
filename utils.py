@@ -1,4 +1,5 @@
 import os
+import sys
 
 import numpy as np
 from tkinter import ttk
@@ -14,6 +15,14 @@ from segcanvas.canvas import CanvasImage
 TMP_FOLDER = gettempdir()  # '/tmp/' if sys.platform == 'linux' else 'C:\\Temp\\'
 
 SATELLITE_CHANNELS = {
+    'LT04': {
+        '01': 'blue',
+        '02': 'green',
+        '03': 'red',
+        '04': 'nir',
+        '05': 'swir1',
+        '07': 'swir2'
+    },
     'LT05': {
         '01': 'blue',
         '02': 'green',
@@ -344,3 +353,34 @@ class TabPolygonImage(CanvasImage):
     def patch_image(self, image):
         super().patch_image(image)
         self.__show_image()
+
+
+class Keycode2Char:
+    linux_table = {39: 's', 32: 'o', 36: 'enter', 19: '0'}
+    linux_table.update({9 + n: str(n) for n in range(1, 10)})
+
+    win_table = {83: 's', 79: 'o', 13: 'enter'}
+    win_table.update({48 + n: str(n) for n in range(10)})
+
+    @classmethod
+    def __call__(cls, n):
+        if sys.platform == 'linux':
+            table = cls.linux_table
+        elif sys.platform == 'win32':
+            table = cls.win_table
+        else:
+            raise Exception('Platform unknown')
+        if n in table:
+            return table[n]
+        return ''
+
+
+def load_proj():
+    if getattr(sys, 'frozen', False):  # if we are inside .exe
+        # noinspection PyUnresolvedReferences, PyProtectedMember
+        os.environ['PROJ_LIB'] = os.path.join(sys._MEIPASS, 'proj')
+    # elif sys.platform == 'win32':
+    #     os.environ['PROJ_LIB'] = os.path.join(os.path.split(sys.executable)[0], 'Library', 'share', 'proj')
+
+
+keycode2char = Keycode2Char()
