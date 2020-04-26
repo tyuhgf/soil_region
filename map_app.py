@@ -214,7 +214,7 @@ class MapWindow:
         if keycode2char(ev.keycode) == 'o':
             self._load_file(None)
         if keycode2char(ev.keycode) == 'enter':
-            self._open_region_dialog_window(None)
+            self._open_histogram_dialog_window(None)
 
 
 class MapTabImage(TabPolygonImage):

@@ -118,7 +118,7 @@ class HistogramDialogWindow:
 
     def _ctrl_callback(self, ev):
         if keycode2char(ev.keycode) == 'enter':
-            self.open_region_window(None)
+            self.open_histogram_window(None)
 
     def _reload_hist(self, _ev=None):
         for i in range(2):
