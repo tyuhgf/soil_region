@@ -145,7 +145,7 @@ class TabPolygonImage(CanvasImage):
         self.root = root
         self.colors = colors
 
-        self.tab = None
+        self.tab = 0
         self.mode = 'DEFAULT'
         self.n_tabs = n_tabs
         self.rasters = [np.zeros(self.shape, dtype=int) for _ in range(self.n_tabs)]
@@ -167,7 +167,7 @@ class TabPolygonImage(CanvasImage):
         self.mode_default(None)
         self.update_raster(n)
         self._create_crafted_image(n)
-        self.__show_image()
+        self._show_image()
         if self.crafted_image is not None:
             self.patch_image(self.crafted_image)
         else:
@@ -270,7 +270,7 @@ class TabPolygonImage(CanvasImage):
         elif self.tab > 0 and self.mode == 'ADD':
             self.polygons[self.tab][-1].append([coords[0], coords[1]])
 
-        self.__show_image()
+        self._show_image()
 
     def _left_mouse_double_click(self, event):
         self.__double_click_flag = True
@@ -309,9 +309,9 @@ class TabPolygonImage(CanvasImage):
             return res[0], self.shape[1] - res[1]
         return None
 
-    def __show_image(self):
+    def _show_image(self):
         # noinspection PyUnresolvedReferences, PyProtectedMember
-        super()._CanvasImage__show_image()
+        super()._show_image()
         self.canvas.delete('polygons')
 
         box_image = self.canvas.coords(self.container)
@@ -353,7 +353,7 @@ class TabPolygonImage(CanvasImage):
 
     def patch_image(self, image):
         super().patch_image(image)
-        self.__show_image()
+        self._show_image()
 
 
 class Keycode2Char:

@@ -139,6 +139,8 @@ class MapWindow:
             crafted_image = Image.fromarray(crafted_image_array.astype('uint8').transpose([1, 0, 2]))
 
             self.histogram_window.canvas_image.reload_image(crafted_image)
+            self.histogram_window.canvas_image.to_tab(self.histogram_window.canvas_image.tab)
+            # self.histogram_window.on_shift(None)
         else:
             self.histogram_window.canvas_image.reload_image(self.histogram_window.base_image)
 

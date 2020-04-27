@@ -90,7 +90,7 @@ class CanvasImage:
     def patch_image(self, image):
         self.__original_image = image
         self.__current_image = image
-        self.__show_image()
+        self._show_image()
 
     def reload_image(self, image, reset_canvas=True):
         self.__original_image = image.copy()
@@ -108,7 +108,7 @@ class CanvasImage:
             self.current_scale = scale
             self._reset_canvas_offset()
 
-        self.__show_image()  # show image on the canvas
+        self._show_image()  # show image on the canvas
         self.canvas.focus_set()  # set focus on the canvas
 
     def grid(self, **kw):
@@ -118,7 +118,7 @@ class CanvasImage:
         self.__imframe.rowconfigure(0, weight=1)  # make canvas expandable
         self.__imframe.columnconfigure(0, weight=1)
 
-    def __show_image(self):
+    def _show_image(self):
         box_image = self.canvas.coords(self.container)  # get image area
         box_canvas = (self.canvas.canvasx(0),  # get visible area of the canvas
                       self.canvas.canvasy(0),
@@ -214,13 +214,13 @@ class CanvasImage:
     def __scroll_x(self, *args, **kwargs):
         """ Scroll canvas horizontally and redraw the image """
         self.canvas.xview(*args)  # scroll horizontally
-        self.__show_image()  # redraw the image
+        self._show_image()  # redraw the image
 
     # noinspection PyUnusedLocal
     def __scroll_y(self, *args, **kwargs):
         """ Scroll canvas vertically and redraw the image """
         self.canvas.yview(*args)  # scroll vertically
-        self.__show_image()  # redraw the image
+        self._show_image()  # redraw the image
 
     def __size_changed(self):
         if self.__original_image is None:
@@ -230,7 +230,7 @@ class CanvasImage:
         new_scale = min(new_scale_w, new_scale_h)
         if new_scale > 1.0:
             self._change_canvas_scale(new_scale)
-        self.__show_image()
+        self._show_image()
 
     # ================================================ Mouse callbacks =================================================
     def __wheel(self, event):
@@ -248,7 +248,7 @@ class CanvasImage:
             scale *= self.__delta
 
         self._change_canvas_scale(scale, x, y)
-        self.__show_image()
+        self._show_image()
 
     def __left_mouse_button(self, event):
         if self._click_callback is None:
@@ -286,7 +286,7 @@ class CanvasImage:
                                (event.y - self._last_rb_click_event.y) ** 2)
         if move_delta > 3:
             self.canvas.scan_dragto(event.x, event.y, gain=1)
-            self.__show_image()  # zoom tile and show it on the canvas
+            self._show_image()  # zoom tile and show it on the canvas
 
     def outside(self, x, y):
         """ Checks if the point (x,y) is outside the image area """
