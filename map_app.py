@@ -10,7 +10,7 @@ from PIL import Image
 import gdal
 
 from histogram_dialog_window import HistogramDialogWindow
-from utils import string_to_value, get_color, SATELLITE_CHANNELS, TabPolygonImage, plot_hist2d, load_proj, keycode2char
+from utils import string_to_value, get_color, SATELLITE_CHANNELS, TabPolygonImage, load_proj, keycode2char, geometry_map
 
 from segcanvas.wrappers import FocusLabelFrame
 
@@ -21,7 +21,7 @@ class MapWindow:
         self.root = app
         self.root.protocol("WM_DELETE_WINDOW", self.quit)
         self.root.title('SoilRegion (Map)')
-        self.root.geometry("%dx%d%+d%+d" % (1200, 900, 100, 100))
+        self.root.geometry("%dx%d%+d%+d" % geometry_map)
 
         self.channels_img = ['07', '04', '02']
         self.channels_histogram = ['03', '04']
@@ -48,24 +48,24 @@ class MapWindow:
         self.save_btn = tk.Button(self.top_menu, text='Save\nImage')
         self.quit_btn = tk.Button(self.top_menu, text='Quit')
         self.mark_reg_btn = ttk.Button(self.top_menu, text='Mark region')
-        self.upd_histogram_btn = ttk.Button(self.top_menu, text='Update')
+        self.upd_histogram_btn = ttk.Button(self.top_menu, text='Show')
         self.to_histogram_btn = tk.Button(self.top_menu, text='View\nHist')
         self.slider = tk.Scale(self.top_menu, from_=-3, to=3, resolution=.1, orient='horizontal',
                                command=self._delayed_reload_channels)
         self.slider.set(0)
 
-        self.load_btn.bind("<Button-1>", self._load_file)
-        self.save_btn.bind("<Button-1>", self.save_file)
-        self.quit_btn.bind("<Button-1>", self.quit)
+        self.load_btn.bind("<ButtonRelease-1>", self._load_file)
+        self.save_btn.bind("<ButtonRelease-1>", self.save_file)
+        self.quit_btn.bind("<ButtonRelease-1>", self.quit)
         self.mark_reg_btn.bind("<ButtonRelease-1>", self._mark_region)
-        self.upd_histogram_btn.bind("<Button-1>", self._update_histogram_window)
-        self.to_histogram_btn.bind("<Button-1>", self._open_histogram_dialog_window)
+        self.upd_histogram_btn.bind("<ButtonRelease-1>", self._update_histogram_window)
+        self.to_histogram_btn.bind("<ButtonRelease-1>", self._open_histogram_dialog_window)
 
         self.load_btn.place(x=10, y=10, width=40, height=40)
         self.save_btn.place(x=60, y=10, width=40, height=40)
         self.quit_btn.place(x=110, y=10, width=40, height=40)
-        self.mark_reg_btn.place(x=-120, y=10, relx=1, width=65, height=20)
-        self.upd_histogram_btn.place(x=-120, y=30, relx=1, width=65, height=20)
+        self.mark_reg_btn.place(x=-120, y=9, relx=1, width=65, height=20)
+        self.upd_histogram_btn.place(x=-120, y=31, relx=1, width=65, height=20)
         self.to_histogram_btn.place(x=-50, y=10, relx=1, width=40, height=40)
         self.slider.place(x=270, y=10)
 
@@ -78,6 +78,7 @@ class MapWindow:
             e.bind('<Return>', self.reload_channels)
 
         self.upd_histogram_btn.configure(state='disabled')
+        self.upd_histogram_btn_state = False
 
     def _add_canvas_frame(self):
         canvas_frame = FocusLabelFrame(self.root)
@@ -98,6 +99,7 @@ class MapWindow:
 
     def _mark_region(self, _ev=None):
         if str(self.upd_histogram_btn['state']) == 'normal':
+            self._update_histogram_window(upd_histogram_btn_state=False)
             self.upd_histogram_btn.configure(state='disabled')
             self.root.after(100, self.mark_reg_btn.state, ['!pressed'])
             self.canvas_image.to_tab(0)
@@ -107,6 +109,38 @@ class MapWindow:
             self.root.after(100, self.mark_reg_btn.state, ['pressed'])
             self.canvas_image.to_tab(1)
             self.redraw()
+
+    def _update_histogram_window(self, _ev=None, upd_histogram_btn_state=None):
+        self.upd_histogram_btn_state = not self.upd_histogram_btn_state
+        if isinstance(upd_histogram_btn_state, bool):
+            self.upd_histogram_btn_state = upd_histogram_btn_state
+
+        if self.upd_histogram_btn_state:
+            self.root.after(100, self.upd_histogram_btn.state, ['pressed'])
+        else:
+            self.root.after(100, self.upd_histogram_btn.state, ['!pressed'])
+
+        if not hasattr(self, 'histogram_window'):
+            return
+        if self.upd_histogram_btn_state:
+            base_array = np.array(self.histogram_window.base_image).transpose([1, 0, 2])
+            map_mask = (self.canvas_image.rasters[self.canvas_image.tab] > 0)[:, ::-1].transpose()
+
+            values = [self.map_image.bands[self.map_image.chan_dict[c]] * map_mask for c in self.channels_histogram]
+            hist = np.histogram2d(values[0][map_mask].flatten(), values[1][map_mask].flatten(),
+                                  bins=self.steps, range=self.range)
+            hist = hist[0]
+            mask = hist > 0
+            mask = mask[:, ::-1]
+            mask = np.array([mask] * 3, dtype=float).transpose([1, 2, 0])
+            crafted_image_array = mask
+
+            crafted_image_array = crafted_image_array * 256 * .5 + base_array * .5
+            crafted_image = Image.fromarray(crafted_image_array.astype('uint8').transpose([1, 0, 2]))
+
+            self.histogram_window.canvas_image.reload_image(crafted_image)
+        else:
+            self.histogram_window.canvas_image.reload_image(self.histogram_window.base_image)
 
     def _delayed_reload_channels(self, _ev):
         if not hasattr(self, '_job'):
@@ -196,17 +230,6 @@ class MapWindow:
             self.histogram_dialog_window.quit(None)
 
         self.histogram_dialog_window = HistogramDialogWindow(self)
-
-    def _update_histogram_window(self, _ev):
-        if not hasattr(self, 'histogram_window'):
-            return
-        mask = (self.canvas_image.rasters[self.canvas_image.tab] > 0)[:, ::-1].transpose()
-
-        values = [self.map_image.bands[self.map_image.chan_dict[c]] * mask for c in self.channels_histogram]
-        hist = np.histogram2d(values[0].flatten(), values[1].flatten(),
-                              bins=self.steps, range=self.range)
-        marked_hist_image = plot_hist2d(hist[0])
-        self.histogram_window.canvas_image.patch_image(marked_hist_image)
 
     def _ctrl_callback(self, ev):
         if keycode2char(ev.keycode) == 's':

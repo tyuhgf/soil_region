@@ -8,11 +8,12 @@ import matplotlib.pyplot as plt
 from tempfile import gettempdir
 
 from matplotlib.colors import LinearSegmentedColormap, hsv_to_rgb
+from screeninfo import get_monitors
 from skimage.draw import polygon
 
 from segcanvas.canvas import CanvasImage
 
-TMP_FOLDER = gettempdir()  # '/tmp/' if sys.platform == 'linux' else 'C:\\Temp\\'
+TMP_FOLDER = gettempdir()  # system temp directory
 
 SATELLITE_CHANNELS = {
     'LT04': {
@@ -202,7 +203,7 @@ class TabPolygonImage(CanvasImage):
         else:
             mask = np.array([raster == 0] * 3).transpose([1, 2, 0])
             crafted_image_array = crafted_image_array * (1 - mask) + self.base_array * mask
-        self.crafted_image = Image.fromarray(crafted_image_array.astype('uint8').transpose(1, 0, 2))
+        self.crafted_image = Image.fromarray(crafted_image_array.astype('uint8').transpose([1, 0, 2]))
 
     def mode_add_polygon(self, _ev):
         if self.tab > 0:
@@ -384,3 +385,16 @@ def load_proj():
 
 
 keycode2char = Keycode2Char()
+
+
+def _calc_geom():
+    monitors = get_monitors()
+    i = int(np.argmax([m.height * m.width for m in monitors]))
+    m = monitors[i]
+    h, w, x, y = m.height, m.width, m.x, m.y
+    g_map = tuple(map(int, (w * 0.55, h * 0.7, y + w * .02, x + h * .05)))  # w, h, y, x
+    g_hist = tuple(map(int, (w * 0.4, w * 0.4, g_map[2] + g_map[0] + w * .02, g_map[3])))
+    return g_map, g_hist
+
+
+geometry_map, geometry_histogram = _calc_geom()

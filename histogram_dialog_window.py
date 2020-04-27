@@ -152,7 +152,7 @@ class HistogramDialogWindow:
             self.map_window.channels_histogram[i] = string_to_value(self.ch_entries[i].get(), 'int_to_str') \
                                                  or self.map_window.channels_histogram[i]
             self.ch_entries[i].delete(0, 'end')
-            self.ch_entries[i].insert(0, int(self.map_window.channels_histgram[i]))
+            self.ch_entries[i].insert(0, int(self.map_window.channels_histogram[i]))
 
         self._calc_ranges()
         self._reload_hist()

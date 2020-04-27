@@ -9,7 +9,7 @@ from tkinter.messagebox import showwarning
 import numpy as np
 from PIL import Image, ImageTk
 
-from utils import Mask, plot_hist2d, AugmentedLabelFrame, TabPolygonImage, keycode2char
+from utils import Mask, plot_hist2d, AugmentedLabelFrame, TabPolygonImage, keycode2char, geometry_histogram
 
 from segcanvas.wrappers import FocusLabelFrame
 
@@ -20,7 +20,7 @@ class HistogramWindow:
         self.root = tk.Toplevel(self.app)
         self.root.protocol("WM_DELETE_WINDOW", self.quit)
         self.root.title('SoilRegion (Region)')
-        self.root.geometry("%dx%d%+d%+d" % (900, 900, 1000, 100))
+        self.root.geometry("%dx%d%+d%+d" % geometry_histogram)
         self.map_window = map_window
         self.hist = hist
 
