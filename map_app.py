@@ -54,7 +54,8 @@ class MapWindow:
         self.load_btn = tk.Button(self.top_menu, text='Load\nImage')
         self.save_btn = tk.Button(self.top_menu, text='Save\nImage')
         self.quit_btn = tk.Button(self.top_menu, text='Quit')
-        self.mark_reg_btn = ttk.Button(self.top_menu, text='Mark region')
+        self.mark_reg_btn = ttk.Button(self.top_menu, text='Poly')
+        self.mask_btn = ttk.Button(self.top_menu, text='Mask')
         self.upd_histogram_btn = ttk.Button(self.top_menu, text='Show')
         self.to_histogram_btn = tk.Button(self.top_menu, text='View\nHist')
         self.slider = tk.Scale(self.top_menu, from_=-3, to=3, resolution=.1, orient='horizontal',
@@ -64,17 +65,20 @@ class MapWindow:
         self.load_btn.bind("<ButtonRelease-1>", self._load_file)
         self.save_btn.bind("<ButtonRelease-1>", self.save_file)
         self.quit_btn.bind("<ButtonRelease-1>", self.quit)
-        self.mark_reg_btn.bind("<ButtonRelease-1>", self._mark_region)
+        self.mark_reg_btn.bind("<ButtonRelease-1>", self._mark_polygon)
+        self.mask_btn.bind("<ButtonRelease-1>", self._mark_mask)
         self.upd_histogram_btn.bind("<ButtonRelease-1>", self._update_histogram_window)
         self.to_histogram_btn.bind("<ButtonRelease-1>", self._open_histogram_dialog_window)
 
         self.load_btn.place(x=10, y=10, width=40, height=40)
         self.save_btn.place(x=60, y=10, width=40, height=40)
         self.quit_btn.place(x=110, y=10, width=40, height=40)
-        self.mark_reg_btn.place(x=-120, y=9, relx=1, width=65, height=20)
-        self.upd_histogram_btn.place(x=-120, y=31, relx=1, width=65, height=20)
-        self.to_histogram_btn.place(x=-50, y=10, relx=1, width=40, height=40)
         self.slider.place(x=270, y=10)
+        self.to_histogram_btn.place(x=410, y=10, width=40, height=40)
+
+        self.mark_reg_btn.place(x=-120, y=10, relx=1, width=40, height=40)
+        self.mask_btn.place(x=-170, y=10, relx=1, width=40, height=40)
+        self.upd_histogram_btn.place(x=-50, y=10, relx=1, width=40, height=40)
 
         self.ch_stringvars = [tk.StringVar() for _ in range(3)]
         self.ch_entries = [tk.Entry(self.top_menu, textvariable=v) for v in self.ch_stringvars]
@@ -86,6 +90,8 @@ class MapWindow:
 
         self.upd_histogram_btn.configure(state='disabled')
         self.upd_histogram_btn_state = False
+        self.polygon_or_mask_state = 'normal'
+        self.map_mask = None
 
     def _add_canvas_frame(self):
         canvas_frame = FocusLabelFrame(self.root)
@@ -105,17 +111,38 @@ class MapWindow:
         if messagebox.askyesno(title="Quit?", message="Closing app may cause data loss."):
             self.root.destroy()
 
-    def _mark_region(self, _ev=None):
-        if str(self.upd_histogram_btn['state']) == 'normal':
+    def _mark_mask(self, _ev=None):
+        self._configure_polygon_or_mask_state(
+            'mask' if self.polygon_or_mask_state in ['normal', 'polygon'] else 'normal')
+
+    def _mark_polygon(self, _ev=None):
+        self._configure_polygon_or_mask_state(
+            'polygon' if self.polygon_or_mask_state in ['normal', 'mask'] else 'normal')
+
+    def _configure_polygon_or_mask_state(self, state='normal'):
+        if state == 'polygon':
+            self.polygon_or_mask_state = 'polygon'
+            self.upd_histogram_btn.configure(state='normal')
+            self._update_histogram_window(upd_histogram_btn_state=False)
+            self.root.after(100, self.mark_reg_btn.state, ['pressed'])
+            self.root.after(100, self.mask_btn.state, ['!pressed'])
+            self.canvas_image.to_tab(1)
+            self.redraw()
+        elif state == 'normal':
+            self.polygon_or_mask_state = 'normal'
             self._update_histogram_window(upd_histogram_btn_state=False)
             self.upd_histogram_btn.configure(state='disabled')
             self.root.after(100, self.mark_reg_btn.state, ['!pressed'])
+            self.root.after(100, self.mask_btn.state, ['!pressed'])
             self.canvas_image.to_tab(0)
             self.redraw()
-        else:
+        else:  # state == 'mask'
+            self.polygon_or_mask_state = 'mask'
             self.upd_histogram_btn.configure(state='normal')
-            self.root.after(100, self.mark_reg_btn.state, ['pressed'])
-            self.canvas_image.to_tab(1)
+            self._update_histogram_window(upd_histogram_btn_state=False)
+            self.root.after(100, self.mark_reg_btn.state, ['!pressed'])
+            self.root.after(100, self.mask_btn.state, ['pressed'])
+            self.canvas_image.to_tab(0)
             self.redraw()
 
     def _update_histogram_window(self, _ev=None, upd_histogram_btn_state=None):
@@ -130,27 +157,33 @@ class MapWindow:
 
         if not hasattr(self, 'histogram_window'):
             return
-        if self.upd_histogram_btn_state:
-            base_array = np.array(self.histogram_window.base_image).transpose([1, 0, 2])
-            map_mask = (self.canvas_image.rasters[self.canvas_image.tab] > 0)[:, ::-1].transpose()
-
-            values = [self.map_image.bands[self.map_image.chan_dict[c]] * map_mask for c in self.channels_histogram]
-            hist = np.histogram2d(values[0][map_mask].flatten(), values[1][map_mask].flatten(),
-                                  bins=self.steps, range=self.range)
-            hist = hist[0]
-            mask = hist > 0
-            mask = mask[:, ::-1]
-            mask = np.array([mask] * 3, dtype=float).transpose([1, 2, 0])
-            crafted_image_array = mask
-
-            crafted_image_array = crafted_image_array * 256 * .5 + base_array * .5
-            crafted_image = Image.fromarray(crafted_image_array.astype('uint8').transpose([1, 0, 2]))
-
-            self.histogram_window.canvas_image.reload_image(crafted_image)
-            self.histogram_window.canvas_image.to_tab(self.histogram_window.canvas_image.tab)
-            # self.histogram_window.on_shift(None)
-        else:
+        if self.polygon_or_mask_state == 'normal' or not self.upd_histogram_btn_state:
             self.histogram_window.canvas_image.reload_image(self.histogram_window.base_image)
+            self.histogram_window.canvas_image.to_tab(self.histogram_window.canvas_image.tab)
+            return
+
+        map_mask = None
+        if self.polygon_or_mask_state == 'polygon':
+            map_mask = (self.canvas_image.rasters[self.canvas_image.tab] > 0)[:, ::-1].transpose()
+        elif self.polygon_or_mask_state == 'mask':
+            map_mask = self.map_mask.astype(bool)
+
+        base_array = np.array(self.histogram_window.base_image).transpose([1, 0, 2])
+        values = [self.map_image.bands[self.map_image.chan_dict[c]] * map_mask for c in self.channels_histogram]
+        hist = np.histogram2d(values[0][map_mask.astype(bool)].flatten(), values[1][map_mask.astype(bool)].flatten(),
+                              bins=self.steps, range=self.range)
+        hist = hist[0]
+        mask = hist > 0
+        mask = mask[:, ::-1]
+        mask = np.array([mask] * 3, dtype=float).transpose([1, 2, 0])
+        crafted_image_array = mask
+
+        crafted_image_array = crafted_image_array * 256 * .5 + base_array * .5
+        crafted_image = Image.fromarray(crafted_image_array.astype('uint8').transpose([1, 0, 2]))
+
+        self.histogram_window.canvas_image.reload_image(crafted_image)
+        self.histogram_window.canvas_image.to_tab(self.histogram_window.canvas_image.tab)
+        # self.histogram_window.on_shift(None)
 
     def _delayed_reload_channels(self, _ev):
         if not hasattr(self, '_job'):
@@ -174,7 +207,7 @@ class MapWindow:
 
     def _load_file(self, _ev):
         img_path = tk_filedialog.Open(self.root, filetypes=[('*.tif files', '*.tif')]).show()
-        if isinstance(img_path, str) and img_path != '':
+        if isinstance(img_path, str) and self.map_image.validate_img_path(img_path):
             if hasattr(self, 'histogram_window'):
                 self.histogram_window.quit(None)
             if hasattr(self, 'histogram_dialog_window'):
@@ -185,6 +218,15 @@ class MapWindow:
             self.reload_channels(channels=[self.map_image.chan_dict_rev[c] for c in ['swir2', 'nir', 'green']])
             self.map_image.create_original_img(self.channels_img, self.slider.get())
             self.canvas_image.reload_image(self.map_image.original_image, True)
+        elif isinstance(img_path, str) and img_path.endswith('.tif'):
+            if not os.path.isfile(img_path):
+                return
+            ds = gdal.Open(img_path)
+            if ds is None:
+                return
+            band = ds.GetRasterBand(1)
+            self.map_mask = band.ReadAsArray()
+            self.redraw()
 
     def save_file(self, _ev):
         fn = tk_filedialog.SaveAs(self.root, initialfile=f'{self.img_name}_mask.tif',
@@ -204,18 +246,24 @@ class MapWindow:
         outdata.GetRasterBand(1).WriteArray(types)
         outdata.FlushCache()  # saves to disk
 
-    def on_shift(self, _arg):
+    def on_shift(self, _ev):
         if self.map_image.original_image is not None:
             self.canvas_image.patch_image(self.map_image.original_image)
 
-    def redraw(self, _arg=None):
-        if self.canvas_image.tab == 0:
-            if self.map_image.filtered_image is not None:
-                self.canvas_image.patch_image(self.map_image.filtered_image)
-            else:
-                self.on_shift(None)
+    def redraw(self, _ev=None):
+        if self.polygon_or_mask_state == 'normal':
+            img = self.map_image.filtered_image
+        elif self.polygon_or_mask_state == 'polygon':
+            img = self.canvas_image.crafted_image
+        else:  # self.polygon_or_mask_state = 'mask'
+            colors = get_color(self.map_mask, self.colors)
+            filtered_image_array = (self.map_image.original_array * 0.5 + colors * 0.5).astype('uint8')
+            img = Image.fromarray(filtered_image_array, mode='RGB')
+
+        if img is not None:
+            self.canvas_image.patch_image(img)
         else:
-            self.canvas_image.patch_image(self.canvas_image.crafted_image)
+            self.on_shift(None)
 
     def mode_add_polygon(self, ev):
         return self.canvas_image.mode_add_polygon(ev)
@@ -346,9 +394,7 @@ class MapImage:
         self.filtered_image = Image.fromarray(filtered_image_array, mode='RGB')
 
     def _get_img_name(self, img_path):
-        if not img_path.endswith('.tif'):
-            return ''
-        if img_path.split('_')[-4] not in SATELLITE_CHANNELS.keys():
+        if not self.validate_img_path(img_path):
             return ''
         self.satellite_type = img_path.split('_')[-4]
         self.chan_dict = SATELLITE_CHANNELS[self.satellite_type]
@@ -358,6 +404,17 @@ class MapImage:
             if img_path.endswith(f'_{c}_{n}'):
                 return img_path[:-2 - len(c) - len(n)]
         return ''
+
+    @staticmethod
+    def validate_img_path(img_path):
+        if not img_path.endswith('.tif'):
+            return False
+        img_path = img_path[:-4]
+        if len(img_path.split('_')) < 5 or img_path.split('_')[-4] not in SATELLITE_CHANNELS.keys():
+            return False
+        if img_path.split('_')[-1] not in SATELLITE_CHANNELS[img_path.split('_')[-4]].keys():
+            return False
+        return True
 
 
 if __name__ == '__main__':
