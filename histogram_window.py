@@ -9,7 +9,8 @@ from tkinter.messagebox import showwarning
 import numpy as np
 from PIL import Image, ImageTk
 
-from utils import Mask, plot_hist2d, AugmentedLabelFrame, TabPolygonImage, keycode2char, geometry_histogram
+from utils import Mask, plot_hist2d, AugmentedLabelFrame, TabPolygonImage, keycode2char, geometry_histogram, \
+    SATELLITE_CHANNELS
 
 from segcanvas.wrappers import FocusLabelFrame
 
@@ -27,6 +28,7 @@ class HistogramWindow:
         self.shape = hist[0].shape
 
         self._add_top_menu()
+        self._add_status_bar()
         self.n_tabs = map_window.n_regions + 1
         self._add_tabs()
         self.base_image = base_image or plot_hist2d(hist[0])
@@ -39,6 +41,14 @@ class HistogramWindow:
         self.root.bind('<space>', self.mode_add_polygon)
         self.root.bind('<Escape>', self.mode_default)
         self.root.bind('<Control-KeyPress>', self._ctrl_callback)
+
+    def _add_status_bar(self):
+        self.status_bar = tk.Frame(self.root, height=15, bg='lightgray')
+        self.status_bar.pack(side='bottom', fill='x')
+        self.status_pos_pix = tk.Label(self.status_bar, width=20, borderwidth=2, relief="groove")
+        self.status_pos_pix.pack(side='right')
+        self.status_pos_real = tk.Label(self.status_bar, width=30, borderwidth=2, relief="groove")
+        self.status_pos_real.pack(side='right')
 
     def _add_top_menu(self):
         self.top_menu = tk.Frame(self.root, height=60, bg='gray')
@@ -70,6 +80,7 @@ class HistogramWindow:
         self.canvas_frame = canvas_frame
         self.canvas_image = HistogramImage(self.canvas_frame, self.canvas,
                                            self.root, self.base_image, self.map_window.colors, self.n_tabs, self)
+        self.canvas_image.canvas.bind('<Motion>', self._motion)
 
     def _add_tabs(self):
         self.tab_parent = ttk.Notebook(self.root)
@@ -224,6 +235,30 @@ class HistogramWindow:
         if key in map(str, range(self.n_tabs)):
             self.tab_parent.select(int(key))
             # self.canvas_image.to_tab(int(key))
+
+    def _motion(self, ev):
+        if not self.canvas_image.container:
+            return
+        q = self.canvas_image.get_click_coordinates(ev)
+        if q is None:
+            return
+        x, y = q
+
+        x_min, x_max = self.hist[1][0], self.hist[1][-1]
+        x_step = self.hist[1][1] - self.hist[1][0]
+        y_min, y_max = self.hist[2][0], self.hist[2][-1]
+        y_step = self.hist[2][1] - self.hist[2][0]
+
+        u = x_min + x * x_step
+        v = y_min + y * y_step
+
+        channels = self.map_window.channels_histogram
+        channels = [SATELLITE_CHANNELS[self.map_window.map_image.satellite_type][c] for c in channels]
+
+        u = format(u, '.6f')
+        v = format(v, '.6f')
+        self.status_pos_real['text'] = f'values: {channels[0]}={u} {channels[1]}={v}'
+        self.status_pos_pix['text'] = f'position: x={x} y={y}'
 
 
 class HistogramImage(TabPolygonImage):

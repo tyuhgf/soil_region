@@ -31,6 +31,7 @@ class MapWindow:
         self.colors = np.array([[0, 0, 0], [255, 0, 0], [0, 255, 0], [0, 0, 255], [0, 255, 255], [255, 0, 255]])
 
         self._add_top_menu()
+        self._add_status_bar()
         self._add_canvas_frame()
         self.map_image = MapImage(self.colors)
 
@@ -39,6 +40,12 @@ class MapWindow:
         self.root.bind('<Control-KeyPress>', self._ctrl_callback)
         self.root.bind('<space>', self.mode_add_polygon)
         self.root.bind('<Escape>', self.mode_default)
+
+    def _add_status_bar(self):
+        self.status_bar = tk.Frame(self.root, height=15, bg='lightgray')
+        self.status_bar.pack(side='bottom', fill='x')
+        self.status_pos = tk.Label(self.status_bar, width=22, borderwidth=2, relief="groove")
+        self.status_pos.pack(side='right')
 
     def _add_top_menu(self):
         self.top_menu = tk.Frame(self.root, height=60, bg='gray')
@@ -91,6 +98,7 @@ class MapWindow:
         self.canvas_frame = canvas_frame
         self.canvas_image = MapTabImage(self.canvas_frame, self.canvas, self.root,
                                         Image.fromarray(np.zeros([80, 80, 3]), mode='RGB'), self.colors, 2)
+        self.canvas_image.canvas.bind('<Motion>', self._motion)
         self.canvas_image.tab = 0
 
     def quit(self, _ev=None):
@@ -240,6 +248,13 @@ class MapWindow:
             self._load_file(None)
         if keycode2char(ev.keycode) == 'enter':
             self._open_histogram_dialog_window(None)
+
+    def _motion(self, ev):
+        if self.canvas_image.container:
+            q = self.canvas_image.get_click_coordinates(ev)
+            if q is not None:
+                x, y = q
+                self.status_pos['text'] = f'position: x={x} y={y}'
 
 
 class MapTabImage(TabPolygonImage):

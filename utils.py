@@ -235,7 +235,7 @@ class TabPolygonImage(CanvasImage):
             self.__double_click_flag = False
             return
 
-        coords = self._get_click_coordinates(event)
+        coords = self.get_click_coordinates(event)
         if coords is None:
             return
         ev = self._last_lb_click_event
@@ -259,7 +259,7 @@ class TabPolygonImage(CanvasImage):
         self.patch_image(self.crafted_image)
 
     def _left_mouse_button_pressed(self, event):
-        coords = self._get_click_coordinates(event)
+        coords = self.get_click_coordinates(event)
         if coords is None:
             return
 
@@ -275,7 +275,7 @@ class TabPolygonImage(CanvasImage):
     def _left_mouse_double_click(self, event):
         self.__double_click_flag = True
 
-        coords = self._get_click_coordinates(event)
+        coords = self.get_click_coordinates(event)
 
         if coords is not None and self.tab is not None and self.tab > 0:
             nearest = self._find_nearest(self.tab, coords)
@@ -303,14 +303,13 @@ class TabPolygonImage(CanvasImage):
             return None
         return self.movables[n][i]
 
-    def _get_click_coordinates(self, event):
+    def get_click_coordinates(self, event):
         res = super()._get_click_coordinates(event)
         if res is not None:
             return res[0], self.shape[1] - res[1]
         return None
 
     def _show_image(self):
-        # noinspection PyUnresolvedReferences, PyProtectedMember
         super()._show_image()
         self.canvas.delete('polygons')
 
