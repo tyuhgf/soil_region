@@ -227,7 +227,7 @@ class MapWindow:
             self.root.after_cancel(self._job)
 
         job = partial(self.update_mask_threshold, value=self.mask_threshold_slider.get())
-        job.__name__ = 'qwe'
+        job.__name__ = '_upd_mask_threshold'
         self._job = self.root.after(100, job)
 
     def reload_channels(self, _ev=None, channels=None):
