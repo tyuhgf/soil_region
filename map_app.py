@@ -351,7 +351,7 @@ class MapImage:
         if ds is None:
             return
         band = ds.GetRasterBand(1)
-        self.bands[b] = band.ReadAsArray()
+        self.bands[b] = band.ReadAsArray().astype(float)
         self.meta_dict = {'geotransform': ds.GetGeoTransform(), 'projection': ds.GetProjection()}
 
     def load(self, img_path):
