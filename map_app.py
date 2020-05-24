@@ -1,4 +1,5 @@
 import tkinter as tk
+from functools import partial
 from tkinter import ttk
 import tkinter.filedialog as tk_filedialog
 
@@ -112,12 +113,18 @@ class MapWindow:
             self.root.destroy()
 
     def _mark_mask(self, _ev=None):
-        self._configure_polygon_or_mask_state(
-            'mask' if self.polygon_or_mask_state in ['normal', 'polygon'] else 'normal')
+        if self.map_mask is not None:
+            self._configure_polygon_or_mask_state(
+                'mask' if self.polygon_or_mask_state in ['normal', 'polygon'] else 'normal')
 
     def _mark_polygon(self, _ev=None):
         self._configure_polygon_or_mask_state(
             'polygon' if self.polygon_or_mask_state in ['normal', 'mask'] else 'normal')
+
+    def mask_threshold_slider_destroy(self):
+        if hasattr(self, 'mask_threshold_slider'):
+            self.mask_threshold_slider.destroy()
+            self.mask_threshold_entry.destroy()
 
     def _configure_polygon_or_mask_state(self, state='normal'):
         if state == 'polygon':
@@ -127,6 +134,7 @@ class MapWindow:
             self.root.after(100, self.mark_reg_btn.state, ['pressed'])
             self.root.after(100, self.mask_btn.state, ['!pressed'])
             self.canvas_image.to_tab(1)
+            self.mask_threshold_slider_destroy()
             self.redraw()
         elif state == 'normal':
             self.polygon_or_mask_state = 'normal'
@@ -135,6 +143,7 @@ class MapWindow:
             self.root.after(100, self.mark_reg_btn.state, ['!pressed'])
             self.root.after(100, self.mask_btn.state, ['!pressed'])
             self.canvas_image.to_tab(0)
+            self.mask_threshold_slider_destroy()
             self.redraw()
         else:  # state == 'mask'
             self.polygon_or_mask_state = 'mask'
@@ -143,12 +152,29 @@ class MapWindow:
             self.root.after(100, self.mark_reg_btn.state, ['!pressed'])
             self.root.after(100, self.mask_btn.state, ['pressed'])
             self.canvas_image.to_tab(0)
+
+            l, r = self.map_mask.min(), self.map_mask.max()
+            l, r = l - (r-l) * .1, r + (r-l) * .1
+            self.mask_threshold_slider = tk.Scale(self.top_menu, from_=l, to=r, resolution=.01, orient='horizontal',
+                                                  command=self._delayed_update_threshold)
+            self.mask_threshold_slider.set((l+r)/2)
+            self.mask_threshold_slider.place(x=-300, y=10, relx=1)
+            self.mask_threshold_stringvar = tk.StringVar()
+            self.mask_threshold_entry = tk.Entry(self.top_menu, textvariable=self.mask_threshold_stringvar)
+            self.mask_threshold_entry.place(x=-360, y=10, relx=1, width=50)
+            self.mask_threshold_entry.delete(0, -1)
+            self.mask_threshold_entry.insert(0, 0)
+            self.mask_threshold_entry.bind('<Return>', self.update_mask_threshold)
+
+            self.update_mask_threshold((l+r)/2)
+
             self.redraw()
 
     def _update_histogram_window(self, _ev=None, upd_histogram_btn_state=None):
-        self.upd_histogram_btn_state = not self.upd_histogram_btn_state
         if isinstance(upd_histogram_btn_state, bool):
             self.upd_histogram_btn_state = upd_histogram_btn_state
+        elif upd_histogram_btn_state is None:
+            self.upd_histogram_btn_state = not self.upd_histogram_btn_state
 
         if self.upd_histogram_btn_state:
             self.root.after(100, self.upd_histogram_btn.state, ['pressed'])
@@ -166,7 +192,7 @@ class MapWindow:
         if self.polygon_or_mask_state == 'polygon':
             map_mask = (self.canvas_image.rasters[self.canvas_image.tab] > 0)[:, ::-1].transpose()
         elif self.polygon_or_mask_state == 'mask':
-            map_mask = self.map_mask.astype(bool)
+            map_mask = self.map_mask > self.mask_threshold_slider.get()
 
         base_array = np.array(self.histogram_window.base_image).transpose([1, 0, 2])
         values = [self.map_image.bands[self.map_image.chan_dict[c]] * map_mask for c in self.channels_histogram]
@@ -185,12 +211,24 @@ class MapWindow:
         self.histogram_window.canvas_image.to_tab(self.histogram_window.canvas_image.tab)
         # self.histogram_window.on_shift(None)
 
+        self.redraw()
+
     def _delayed_reload_channels(self, _ev):
         if not hasattr(self, '_job'):
             self._job = None
         if self._job:
             self.root.after_cancel(self._job)
         self._job = self.root.after(100, self.reload_channels)
+
+    def _delayed_update_threshold(self, _ev=None):
+        if not hasattr(self, '_job'):
+            self._job = None
+        if self._job:
+            self.root.after_cancel(self._job)
+
+        job = partial(self.update_mask_threshold, value=self.mask_threshold_slider.get())
+        job.__name__ = 'qwe'
+        self._job = self.root.after(100, job)
 
     def reload_channels(self, _ev=None, channels=None):
         for i in range(3):
@@ -204,6 +242,15 @@ class MapWindow:
             self.map_image.create_original_img(self.channels_img, self.slider.get())
             self.canvas_image.reload_image(self.map_image.original_image, True)
             self.redraw()
+
+    def update_mask_threshold(self, ev=None, value=None):
+        value = value if value is not None else float(self.mask_threshold_entry.get()) if ev else None
+        if value is not None:
+            self.mask_threshold_slider.set(value)
+            self.mask_threshold_entry.delete(0, 'end')
+            self.mask_threshold_entry.insert(0, value)
+        self._update_histogram_window(upd_histogram_btn_state='keep')
+        self.redraw()
 
     def _load_file(self, _ev):
         img_path = tk_filedialog.Open(self.root, filetypes=[('*.tif files', '*.tif')]).show()
@@ -256,7 +303,8 @@ class MapWindow:
         elif self.polygon_or_mask_state == 'polygon':
             img = self.canvas_image.crafted_image
         else:  # self.polygon_or_mask_state = 'mask'
-            colors = get_color(self.map_mask, self.colors)
+            map_mask = np.array(self.map_mask > self.mask_threshold_slider.get(), dtype=int)
+            colors = get_color(map_mask, self.colors)
             filtered_image_array = (self.map_image.original_array * 0.5 + colors * 0.5).astype('uint8')
             img = Image.fromarray(filtered_image_array, mode='RGB')
 
