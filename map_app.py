@@ -426,7 +426,7 @@ class MapImage:
 
         for i in range(len(arrays)):
             if not all(shapes[i] == [x, y]):
-                arrays[i] = arrays[i][::shapes[i][0] // x][::shapes[i][1] // y]
+                arrays[i] = arrays[i][::shapes[i][0] // x, ::shapes[i][1] // y]
         if downsample != 1:
             for i in range(len(arrays)):
                 arrays[i] = arrays[i][::downsample, ::downsample]
