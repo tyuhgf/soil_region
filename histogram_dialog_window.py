@@ -63,7 +63,7 @@ class HistogramDialogWindow:
             e.bind('<Return>', self.reload_graphs)
 
     def _calc_ranges(self, _ev=None):
-        values = [self.map_image.bands[self.map_image.chan_dict[c]].copy() for c in self.map_window.channels_histogram]
+        values = self.map_image.get_bands(self.map_window.channels_histogram)
         self.x_range, self.y_range = ([values[i].min(), values[i].max()] for i in range(2))
 
         for i in range(2):
@@ -134,7 +134,7 @@ class HistogramDialogWindow:
             self.steps_entries[i].delete(0, 'end')
             self.steps_entries[i].insert(0, self.steps[i])
 
-        values = [self.map_image.bands[self.map_image.chan_dict[c]] for c in self.map_window.channels_histogram]
+        values = self.map_image.get_bands(self.map_window.channels_histogram)
         self.hist = np.histogram2d(values[0].flatten(), values[1].flatten(),
                                    bins=self.steps,
                                    range=[self.x_range, self.y_range])

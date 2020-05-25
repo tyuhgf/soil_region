@@ -195,8 +195,9 @@ class MapWindow:
             map_mask = self.map_mask > self.mask_threshold_slider.get()
 
         base_array = np.array(self.histogram_window.base_image).transpose([1, 0, 2])
-        values = [self.map_image.bands[self.map_image.chan_dict[c]] * map_mask for c in self.channels_histogram]
-        hist = np.histogram2d(values[0][map_mask.astype(bool)].flatten(), values[1][map_mask.astype(bool)].flatten(),
+        values = self.map_image.get_bands(self.channels_histogram)
+        values = [arr * map_mask for arr in values]
+        hist = np.histogram2d(values[0][map_mask].flatten(), values[1][map_mask].flatten(),
                               bins=self.steps, range=self.range)
         hist = hist[0]
         mask = hist > 0
@@ -282,7 +283,7 @@ class MapWindow:
             return
         if not fn.endswith('.tif'):
             fn += '.tif'
-        arrays = [self.map_image.bands[self.map_image.chan_dict[c]] for c in self.map_image.mask.channels]
+        arrays = self.map_image.get_bands(self.map_image.mask.channels)
         # todo revisit logic create_filtered_image
         types = self.map_image.mask.get_value(*tuple(arrays))
 
@@ -410,31 +411,53 @@ class MapImage:
             for n, c in self.chan_dict.items():
                 self.load_band(c, f'{img_prefix}_{c}_{n}.tif')
 
+    def get_bands(self, channels, downsample=1):
+        """downsample!=False will make all bands having shape of smallest // downsample."""
+        arrays = [self.bands[self.chan_dict[c]].copy() for c in channels]
+
+        if not downsample:
+            return arrays
+
+        shapes = np.array([a.shape for a in arrays])
+        x = shapes[:, 0].min()
+        y = shapes[:, 1].min()
+        if not all(shapes[:, 0] % x == 0) or not all(shapes[:, 1] % y == 0):
+            raise ValueError('Bands have incompatible shapes!')
+
+        for i in range(len(arrays)):
+            if not all(shapes[i] == [x, y]):
+                arrays[i] = arrays[i][::shapes[i][0] // x][::shapes[i][1] // y]
+        if downsample != 1:
+            for i in range(len(arrays)):
+                arrays[i] = arrays[i][::downsample, ::downsample]
+        return arrays
+
     def create_original_img(self, b, r=0):
-        arrays = [self.bands[self.chan_dict[c]].copy() for c in b]
+        arrays = self.get_bands(b)
         if len(arrays) == 1:
             arrays *= 3
         if len(arrays) == 2:
             arrays += [np.zeros_like(arrays[0])]
         assert len(arrays) == 3
 
-        for i in range(3):
-            arrays[i] -= arrays[i].mean()
-            arrays[i] /= np.mean(arrays[i] ** 2) ** .5
-            bounds = np.quantile(arrays[i].flatten(), .01) * .99, np.quantile(arrays[i].flatten(), .99) * .99
-            _arr = arrays[i][(bounds[0] < arrays[i]) * (arrays[i] < bounds[1])]
-            rr = np.quantile(_arr, .05) / 2 ** r, np.quantile(_arr, .95) / 2 ** r
-            arrays[i][arrays[i] < rr[0]] = rr[0]
-            arrays[i][arrays[i] > rr[1]] = rr[1]
-            arrays[i] -= arrays[i].mean()
-            arrays[i] /= np.mean(arrays[i] ** 2) ** .5
-            arrays[i] = ((arrays[i] - arrays[i].min()) / (arrays[i].max() - arrays[i].min()) * 255).astype('uint8')
-            # arrays[i] = ((arrays[i] - rr[0]) / (rr[1] - rr[0]) * 255).astype('uint8')
+        for i in range(len(arrays)):
+            arr = arrays[i]
+
+            low, high = np.quantile(arr.flatten(), .01), np.quantile(arr.flatten(), .99)
+            low, high = low + (high-low) * .01, high - (high-low) * 0.01
+            tmp_arr = arr[(low < arr) * (arr < high)]
+
+            low, high, mean = np.quantile(tmp_arr, .05), np.quantile(tmp_arr, .95), tmp_arr.mean()
+            low, high = mean + (low - mean) * 2 ** -r, mean + (high - mean) * 2 ** -r
+            arr[arr < low] = low
+            arr[arr > high] = high
+
+            arrays[i] = ((arr - arr.min()) / (arr.max() - arr.min()) * 255).astype('uint8')
         self.original_image = Image.fromarray(np.array(arrays).transpose([1, 2, 0]), mode='RGB')
         self.original_array = np.array(self.original_image)
 
     def create_filtered_image(self):
-        arrays = [self.bands[self.chan_dict[c]] for c in self.mask.channels]
+        arrays = self.get_bands(self.mask.channels)
 
         types = self.mask.get_value(*tuple(arrays))
         colors = get_color(types, self.colors)

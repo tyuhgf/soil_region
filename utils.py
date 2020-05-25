@@ -108,6 +108,7 @@ def string_to_value(s, dtype='int_to_str', logger=None):
 
 
 def plot_hist2d(hist):
+    """2-dimensional array to Image"""
     array = hist.copy()
     array[0][:] = 0
     array[:][0] = 0
@@ -128,6 +129,7 @@ def plot_hist2d(hist):
 
 
 def plot_hist(x):
+    """1-dimensional array to histogram Image"""
     q = x.flatten().copy()
     q = q[~np.isnan(q)]
     dpi = 100
