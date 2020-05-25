@@ -166,7 +166,7 @@ class MapWindow:
             self.mask_threshold_entry.insert(0, 0)
             self.mask_threshold_entry.bind('<Return>', self.update_mask_threshold)
 
-            self.update_mask_threshold((l+r)/2)
+            self.update_mask_threshold(value=(l+r)/2)
 
             self.redraw()
 
