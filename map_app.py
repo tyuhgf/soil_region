@@ -9,9 +9,11 @@ from tkinter import messagebox
 import numpy as np
 from PIL import Image
 import gdal
+from scipy.interpolate import interp2d
 
 from histogram_dialog_window import HistogramDialogWindow
-from utils import string_to_value, get_color, SATELLITE_CHANNELS, TabPolygonImage, load_proj, keycode2char, geometry_map
+from utils import string_to_value, get_color, SATELLITE_CHANNELS, TabPolygonImage, load_proj, keycode2char, \
+    geometry_map, copy_list
 
 from segcanvas.wrappers import FocusLabelFrame
 
@@ -392,6 +394,7 @@ class MapImage:
         self.filtered_image = None
         self.meta_dict = None
         self.img_name = None
+        self._buffer_for_get_bands = {}
 
     def load_band(self, b, img_path):
         if not os.path.isfile(img_path):
@@ -411,25 +414,53 @@ class MapImage:
             for n, c in self.chan_dict.items():
                 self.load_band(c, f'{img_prefix}_{c}_{n}.tif')
 
-    def get_bands(self, channels, downsample=1):
+    def get_bands(self, channels, downsample=1, shape=None):
         """downsample!=False will make all bands having shape of smallest // downsample."""
         arrays = [self.bands[self.chan_dict[c]].copy() for c in channels]
 
-        if not downsample:
-            return arrays
+        if not shape:
+            if not downsample:
+                return arrays
 
-        shapes = np.array([a.shape for a in arrays])
-        x = shapes[:, 0].min()
-        y = shapes[:, 1].min()
-        if not all(shapes[:, 0] % x == 0) or not all(shapes[:, 1] % y == 0):
-            raise ValueError('Bands have incompatible shapes!')
+            shapes = np.array([a.shape for a in arrays])
+            x = shapes[:, 0].min()
+            y = shapes[:, 1].min()
+
+            if downsample != 1:
+                x //= downsample
+                y //= downsample
+        else:
+            x, y = shape
+
+        if (x, y, tuple(channels)) in self._buffer_for_get_bands:
+            return copy_list(self._buffer_for_get_bands[(x, y, tuple(channels))])
 
         for i in range(len(arrays)):
-            if not all(shapes[i] == [x, y]):
-                arrays[i] = arrays[i][::shapes[i][0] // x, ::shapes[i][1] // y]
-        if downsample != 1:
-            for i in range(len(arrays)):
-                arrays[i] = arrays[i][::downsample, ::downsample]
+            a = arrays[i]
+            no_interpolation = True
+
+            if a.shape[0] % x <= x // 100:
+                a = a[::a.shape[0] // x]
+            elif a.shape[0] % x >= x - x // 100:
+                a = a[::a.shape[0] // x][:x]
+            else:
+                no_interpolation = False
+
+            if a.shape[1] % y <= y // 100:
+                a = a[:, ::a.shape[1] // y]
+            elif a.shape[1] % y >= y - y // 100:
+                a = a[:, ::a.shape[1] // y][:, :y]
+            else:
+                no_interpolation = False
+
+            if not no_interpolation:
+                a = interp2d(np.linspace(0, 1, a.shape[1]),
+                             np.linspace(0, 1, a.shape[0]),
+                             a, kind='cubic')(np.linspace(0, 1, y), np.linspace(0, 1, x))
+
+            arrays[i] = a
+
+        self._buffer_for_get_bands[(x, y, tuple(channels))] = copy_list(arrays)
         return arrays
 
     def create_original_img(self, b, r=0):
@@ -457,7 +488,7 @@ class MapImage:
         self.original_array = np.array(self.original_image)
 
     def create_filtered_image(self):
-        arrays = self.get_bands(self.mask.channels)
+        arrays = self.get_bands(self.mask.channels, shape=self.original_array.shape[:2])
 
         types = self.mask.get_value(*tuple(arrays))
         colors = get_color(types, self.colors)

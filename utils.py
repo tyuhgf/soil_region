@@ -364,6 +364,10 @@ class TabPolygonImage(CanvasImage):
         self._show_image()
 
 
+def copy_list(arg):
+    return [a.copy() for a in arg]
+
+
 class Keycode2Char:
     linux_table = {39: 's', 32: 'o', 36: 'enter', 19: '0'}
     linux_table.update({9 + n: str(n) for n in range(1, 10)})

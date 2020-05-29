@@ -1,6 +1,10 @@
-gdal
+gdal~=3.0.2
 pillow
-numpy
+numpy~=1.18.1
+scipy
 matplotlib==3.0.3
 scikit-image
 screeninfo
+
+setuptools~=44.0.0
+future~=0.18.2
