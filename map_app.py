@@ -410,6 +410,7 @@ class MapImage:
         img_prefix = self._get_img_name(img_path)
         self.img_name = img_prefix.split('/')[-1]
         self.bands = dict()
+        self._buffer_for_get_bands = {}
         if img_prefix != '':
             for n, c in self.chan_dict.items():
                 self.load_band(c, f'{img_prefix}_{c}_{n}.tif')
@@ -440,14 +441,14 @@ class MapImage:
             no_interpolation = True
 
             if a.shape[0] % x <= x // 100:
-                a = a[::a.shape[0] // x]
+                a = a[::a.shape[0] // x][:x]
             elif a.shape[0] % x >= x - x // 100:
                 a = a[::a.shape[0] // x][:x]
             else:
                 no_interpolation = False
 
             if a.shape[1] % y <= y // 100:
-                a = a[:, ::a.shape[1] // y]
+                a = a[:, ::a.shape[1] // y][:, :y]
             elif a.shape[1] % y >= y - y // 100:
                 a = a[:, ::a.shape[1] // y][:, :y]
             else:
