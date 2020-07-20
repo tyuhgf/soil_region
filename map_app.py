@@ -197,7 +197,7 @@ class MapWindow:
             map_mask = self.map_mask > self.mask_threshold_slider.get()
 
         base_array = np.array(self.histogram_window.base_image).transpose([1, 0, 2])
-        values = self.map_image.get_bands(self.channels_histogram)
+        values = self.map_image.get_bands(self.channels_histogram, shape=self.map_image.original_array.shape[:2])
         values = [arr * map_mask for arr in values]
         hist = np.histogram2d(values[0][map_mask].flatten(), values[1][map_mask].flatten(),
                               bins=self.steps, range=self.range)
@@ -285,7 +285,7 @@ class MapWindow:
             return
         if not fn.endswith('.tif'):
             fn += '.tif'
-        arrays = self.map_image.get_bands(self.map_image.mask.channels)
+        arrays = self.map_image.get_bands(self.map_image.mask.channels, shape=self.map_image.original_array.shape[:2])
         # todo revisit logic create_filtered_image
         types = self.map_image.mask.get_value(*tuple(arrays))
 
