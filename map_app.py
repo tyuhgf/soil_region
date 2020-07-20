@@ -285,14 +285,16 @@ class MapWindow:
             return
         if not fn.endswith('.tif'):
             fn += '.tif'
-        arrays = self.map_image.get_bands(self.map_image.mask.channels, shape=self.map_image.original_array.shape[:2])
+        arrays = self.map_image.get_bands(self.map_image.mask.channels)
         # todo revisit logic create_filtered_image
         types = self.map_image.mask.get_value(*tuple(arrays))
 
+        band = self.map_image.chan_dict[self.map_image.mask.channels[-1]]  # band to take GeoTransform
+
         driver = gdal.GetDriverByName("GTiff")
         outdata = driver.Create(fn, types.shape[1], types.shape[0], 1, gdal.GDT_UInt16)
-        outdata.SetGeoTransform(self.map_image.meta_dict['geotransform'])
-        outdata.SetProjection(self.map_image.meta_dict['projection'])
+        outdata.SetGeoTransform(self.map_image.meta_dict[band]['geotransform'])
+        outdata.SetProjection(self.map_image.meta_dict[band]['projection'])
         outdata.GetRasterBand(1).WriteArray(types)
         outdata.FlushCache()  # saves to disk
 
@@ -392,7 +394,7 @@ class MapImage:
         self.original_image = None
         self.original_array = None
         self.filtered_image = None
-        self.meta_dict = None
+        self.meta_dict = dict()
         self.img_name = None
         self._buffer_for_get_bands = {}
 
@@ -404,7 +406,7 @@ class MapImage:
             return
         band = ds.GetRasterBand(1)
         self.bands[b] = band.ReadAsArray().astype(float)
-        self.meta_dict = {'geotransform': ds.GetGeoTransform(), 'projection': ds.GetProjection()}
+        self.meta_dict[b] = {'geotransform': ds.GetGeoTransform(), 'projection': ds.GetProjection()}
 
     def load(self, img_path):
         img_prefix = self._get_img_name(img_path)
