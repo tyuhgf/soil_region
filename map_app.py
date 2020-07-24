@@ -94,7 +94,6 @@ class MapWindow:
         self.upd_histogram_btn.configure(state='disabled')
         self.upd_histogram_btn_state = False
         self.polygon_or_mask_state = 'normal'
-        self.map_mask = None
 
     def _add_canvas_frame(self):
         canvas_frame = FocusLabelFrame(self.root)
@@ -115,7 +114,7 @@ class MapWindow:
             self.root.destroy()
 
     def _mark_mask(self, _ev=None):
-        if self.map_mask is not None:
+        if self.map_image.map_mask is not None:
             self._configure_polygon_or_mask_state(
                 'mask' if self.polygon_or_mask_state in ['normal', 'polygon'] else 'normal')
 
@@ -155,7 +154,7 @@ class MapWindow:
             self.root.after(100, self.mask_btn.state, ['pressed'])
             self.canvas_image.to_tab(0)
 
-            l, r = self.map_mask.min(), self.map_mask.max()
+            l, r = self.map_image.map_mask.min(), self.map_image.map_mask.max()
             l, r = l - (r-l) * .1, r + (r-l) * .1
             self.mask_threshold_slider = tk.Scale(self.top_menu, from_=l, to=r, resolution=.01, orient='horizontal',
                                                   command=self._delayed_update_threshold)
@@ -194,7 +193,8 @@ class MapWindow:
         if self.polygon_or_mask_state == 'polygon':
             map_mask = (self.canvas_image.rasters[self.canvas_image.tab] > 0)[:, ::-1].transpose()
         elif self.polygon_or_mask_state == 'mask':
-            map_mask = self.map_mask > self.mask_threshold_slider.get()
+            map_mask = self.map_image.get_bands(['_map_mask_'], shape=self.map_image.original_array.shape[:2])[0]
+            map_mask = map_mask > self.mask_threshold_slider.get()
 
         base_array = np.array(self.histogram_window.base_image).transpose([1, 0, 2])
         values = self.map_image.get_bands(self.channels_histogram, shape=self.map_image.original_array.shape[:2])
@@ -269,13 +269,7 @@ class MapWindow:
             self.map_image.create_original_img(self.channels_img, self.slider.get())
             self.canvas_image.reload_image(self.map_image.original_image, True)
         elif isinstance(img_path, str) and img_path.endswith('.tif'):
-            if not os.path.isfile(img_path):
-                return
-            ds = gdal.Open(img_path)
-            if ds is None:
-                return
-            band = ds.GetRasterBand(1)
-            self.map_mask = band.ReadAsArray()
+            self.map_image.load_band('_map_mask_', img_path)
             self.redraw()
 
     def save_file(self, _ev):
@@ -307,8 +301,9 @@ class MapWindow:
             img = self.map_image.filtered_image
         elif self.polygon_or_mask_state == 'polygon':
             img = self.canvas_image.crafted_image
-        else:  # self.polygon_or_mask_state = 'mask'
-            map_mask = np.array(self.map_mask > self.mask_threshold_slider.get(), dtype=int)
+        else:  # self.polygon_or_mask_state == 'mask'
+            map_mask = self.map_image.get_bands(['_map_mask_'], shape=self.map_image.original_array.shape[:2])[0]
+            map_mask = np.array(map_mask > self.mask_threshold_slider.get(), dtype=int)
             colors = get_color(map_mask, self.colors)
             filtered_image_array = (self.map_image.original_array * 0.5 + colors * 0.5).astype('uint8')
             img = Image.fromarray(filtered_image_array, mode='RGB')
@@ -390,7 +385,8 @@ class MapImage:
     def __init__(self, colors):
         self.colors = colors
         self.bands = None
-        self.mask = None
+        self.map_mask = None  # mask on the map
+        self.mask = None  # mask in histogram space
         self.original_image = None
         self.original_array = None
         self.filtered_image = None
@@ -405,8 +401,11 @@ class MapImage:
         if ds is None:
             return
         band = ds.GetRasterBand(1)
-        self.bands[b] = band.ReadAsArray().astype(float)
-        self.meta_dict[b] = {'geotransform': ds.GetGeoTransform(), 'projection': ds.GetProjection()}
+        if b == '_map_mask_':
+            self.map_mask = band.ReadAsArray().astype(float)
+        else:
+            self.bands[b] = band.ReadAsArray().astype(float)
+            self.meta_dict[b] = {'geotransform': ds.GetGeoTransform(), 'projection': ds.GetProjection()}
 
     def load(self, img_path):
         img_prefix = self._get_img_name(img_path)
@@ -419,7 +418,10 @@ class MapImage:
 
     def get_bands(self, channels, downsample=1, shape=None):
         """downsample!=False will make all bands having shape of smallest // downsample."""
-        arrays = [self.bands[self.chan_dict[c]].copy() for c in channels]
+        if channels == ['_map_mask_']:
+            arrays = [self.map_mask]
+        else:
+            arrays = [self.bands[self.chan_dict[c]].copy() for c in channels]
 
         if not shape:
             if not downsample:
