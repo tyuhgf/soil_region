@@ -94,7 +94,7 @@ def string_to_value(s, dtype='int_to_str', logger=None):
     try:
         if dtype == 'int_to_str':
             n = int(s)
-            if not 0 < n < 8:
+            if not 0 < n < 13:
                 raise ValueError('Unknown Channel')
             return str(n).zfill(2)
         elif dtype == 'float':

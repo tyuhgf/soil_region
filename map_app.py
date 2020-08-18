@@ -447,14 +447,14 @@ class MapImage:
             if a.shape[0] % x <= x // 100:
                 a = a[::a.shape[0] // x][:x]
             elif a.shape[0] % x >= x - x // 100:
-                a = a[::a.shape[0] // x][:x]
+                a = a[::a.shape[0] // x + 1][:x]
             else:
                 no_interpolation = False
 
             if a.shape[1] % y <= y // 100:
                 a = a[:, ::a.shape[1] // y][:, :y]
             elif a.shape[1] % y >= y - y // 100:
-                a = a[:, ::a.shape[1] // y][:, :y]
+                a = a[:, ::a.shape[1] // y + 1][:, :y]
             else:
                 no_interpolation = False
 
