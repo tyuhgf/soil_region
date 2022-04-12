@@ -1,4 +1,4 @@
-gdal~=3.0.2
+#gdal~=3.0.2
 pillow
 numpy~=1.18.1
 scipy

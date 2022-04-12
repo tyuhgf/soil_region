@@ -214,7 +214,7 @@ class HistogramWindow:
 
     def redraw_map_window(self, _arg):
         self.canvas_image.mask.update_array(self.canvas_image.rasters[self.canvas_image.tab])
-        self.map_window.map_image.mask = self.canvas_image.mask
+        self.map_window.map_image.histogram_mask = self.canvas_image.mask
         self.map_window.map_image.create_filtered_image()
         self.map_window.redraw()
 

@@ -2,9 +2,10 @@ import tkinter as tk
 from functools import partial
 from tkinter import ttk
 import tkinter.filedialog as tk_filedialog
+from tkinter import messagebox
 
 import os.path
-from tkinter import messagebox
+import logging
 
 import numpy as np
 from PIL import Image
@@ -16,6 +17,19 @@ from utils import string_to_value, get_color, SATELLITE_CHANNELS, TabPolygonImag
     geometry_map, copy_list
 
 from segcanvas.wrappers import FocusLabelFrame
+
+logger = logging.Logger('logger')
+
+
+def get_stream_handler():
+    _log_format = f"%(asctime)s - [%(levelname)s] - (%(filename)s)(%(lineno)d)(%(funcName)s) - %(message)s"
+    stream_handler = logging.StreamHandler()
+    stream_handler.setLevel(0)
+    stream_handler.setFormatter(logging.Formatter(_log_format))
+    return stream_handler
+
+
+logger.addHandler(get_stream_handler())
 
 
 class MapWindow:
@@ -43,6 +57,8 @@ class MapWindow:
         self.root.bind('<Control-KeyPress>', self._ctrl_callback)
         self.root.bind('<space>', self.mode_add_polygon)
         self.root.bind('<Escape>', self.mode_default)
+
+        logger.info('Init App')
 
     def _add_status_bar(self):
         self.status_bar = tk.Frame(self.root, height=15, bg='lightgray')
@@ -110,15 +126,19 @@ class MapWindow:
         self.canvas_image.tab = 0
 
     def quit(self, _ev=None):
+        logger.info('')
         if messagebox.askyesno(title="Quit?", message="Closing app may cause data loss."):
+            logger.info('Quit!')
             self.root.destroy()
 
     def _mark_mask(self, _ev=None):
+        logger.info('')
         if self.map_image.map_mask is not None:
             self._configure_polygon_or_mask_state(
                 'mask' if self.polygon_or_mask_state in ['normal', 'polygon'] else 'normal')
 
     def _mark_polygon(self, _ev=None):
+        logger.info('')
         self._configure_polygon_or_mask_state(
             'polygon' if self.polygon_or_mask_state in ['normal', 'mask'] else 'normal')
 
@@ -128,6 +148,7 @@ class MapWindow:
             self.mask_threshold_entry.destroy()
 
     def _configure_polygon_or_mask_state(self, state='normal'):
+        logger.info(f'state={state}')
         if state == 'polygon':
             self.polygon_or_mask_state = 'polygon'
             self.upd_histogram_btn.configure(state='normal')
@@ -172,6 +193,7 @@ class MapWindow:
             self.redraw()
 
     def _update_histogram_window(self, _ev=None, upd_histogram_btn_state=None):
+        logger.info(f'state={upd_histogram_btn_state}')
         if isinstance(upd_histogram_btn_state, bool):
             self.upd_histogram_btn_state = upd_histogram_btn_state
         elif upd_histogram_btn_state is None:
@@ -217,6 +239,8 @@ class MapWindow:
         self.redraw()
 
     def _delayed_reload_channels(self, _ev):
+        logger.info('')
+
         if not hasattr(self, '_job'):
             self._job = None
         if self._job:
@@ -224,6 +248,8 @@ class MapWindow:
         self._job = self.root.after(100, self.reload_channels)
 
     def _delayed_update_threshold(self, _ev=None):
+        logger.info('')
+
         if not hasattr(self, '_job'):
             self._job = None
         if self._job:
@@ -234,6 +260,7 @@ class MapWindow:
         self._job = self.root.after(100, job)
 
     def reload_channels(self, _ev=None, channels=None):
+        logger.info(f'channels={channels}')
         for i in range(3):
             if channels:
                 self.channels_img[i] = channels[i]
@@ -247,6 +274,7 @@ class MapWindow:
             self.redraw()
 
     def update_mask_threshold(self, ev=None, value=None):
+        logger.info(f'value={value}')
         value = value if value is not None else float(self.mask_threshold_entry.get()) if ev else None
         if value is not None:
             self.mask_threshold_slider.set(value)
@@ -262,6 +290,7 @@ class MapWindow:
                 self.histogram_window.quit(None)
             if hasattr(self, 'histogram_dialog_window'):
                 self.histogram_dialog_window.quit(None)
+            logger.info(f'loading channels for {img_path}')
             self.map_image.load(img_path)
             self.img_name = self.map_image.img_name
             self.root.title(f'{self.img_name} - SoilRegion (Map)')
@@ -269,21 +298,28 @@ class MapWindow:
             self.map_image.create_original_img(self.channels_img, self.slider.get())
             self.canvas_image.reload_image(self.map_image.original_image, True)
         elif isinstance(img_path, str) and img_path.endswith('.tif'):
+            logger.info('loading mask')
             self.map_image.load_band('_map_mask_', img_path)
             self.redraw()
 
     def save_file(self, _ev):
+        logger.info('')
         fn = tk_filedialog.SaveAs(self.root, initialfile=f'{self.img_name}_mask.tif',
                                   filetypes=[('*.tif files', '*.tif')]).show()
         if fn == '':
             return
         if not fn.endswith('.tif'):
             fn += '.tif'
-        arrays = self.map_image.get_bands(self.map_image.mask.channels)
-        # todo revisit logic create_filtered_image
-        types = self.map_image.mask.get_value(*tuple(arrays))
 
-        band = self.map_image.chan_dict[self.map_image.mask.channels[-1]]  # band to take GeoTransform
+        band = None  # band to take GeoTransform
+        for b in ['blue', 'green', 'red', 'nir', 'swir1', 'swir2']:
+            if b in self.map_image.bands:
+                band = b
+                break
+
+        arrays = self.map_image.get_bands(self.map_image.histogram_mask.channels,
+                                          shape=self.map_image.bands[band].shape)
+        types = self.map_image.histogram_mask.get_value(*tuple(arrays))
 
         driver = gdal.GetDriverByName("GTiff")
         outdata = driver.Create(fn, types.shape[1], types.shape[0], 1, gdal.GDT_UInt16)
@@ -293,10 +329,12 @@ class MapWindow:
         outdata.FlushCache()  # saves to disk
 
     def on_shift(self, _ev):
+        logger.info('')
         if self.map_image.original_image is not None:
             self.canvas_image.patch_image(self.map_image.original_image)
 
     def redraw(self, _ev=None):
+        logger.info('')
         if self.polygon_or_mask_state == 'normal':
             img = self.map_image.filtered_image
         elif self.polygon_or_mask_state == 'polygon':
@@ -314,18 +352,22 @@ class MapWindow:
             self.on_shift(None)
 
     def mode_add_polygon(self, ev):
+        logger.info('')
         return self.canvas_image.mode_add_polygon(ev)
 
     def mode_default(self, ev):
+        logger.info('')
         return self.canvas_image.mode_default(ev)
 
     def add_histogram_window(self, histogram_window):
+        logger.info('')
         self._add_histogram_window(histogram_window)
 
     def _add_histogram_window(self, histogram_window):
         self.histogram_window = histogram_window
 
     def _open_histogram_dialog_window(self, _arg):
+        logger.info('')
         if hasattr(self, 'histogram_window'):
             if messagebox.askyesno(title="Close histogram window?",
                                    message="Closing histogram window may cause data loss."):
@@ -338,6 +380,7 @@ class MapWindow:
         self.histogram_dialog_window = HistogramDialogWindow(self)
 
     def _ctrl_callback(self, ev):
+        logger.info(f'{ev.keycode}')
         if keycode2char(ev.keycode) == 's':
             self.save_file(None)
         if keycode2char(ev.keycode) == 'o':
@@ -386,7 +429,7 @@ class MapImage:
         self.colors = colors
         self.bands = None
         self.map_mask = None  # mask on the map
-        self.mask = None  # mask in histogram space
+        self.histogram_mask = None  # mask in histogram space
         self.original_image = None
         self.original_array = None
         self.filtered_image = None
@@ -493,9 +536,9 @@ class MapImage:
         self.original_array = np.array(self.original_image)
 
     def create_filtered_image(self):
-        arrays = self.get_bands(self.mask.channels, shape=self.original_array.shape[:2])
+        arrays = self.get_bands(self.histogram_mask.channels, shape=self.original_array.shape[:2])
 
-        types = self.mask.get_value(*tuple(arrays))
+        types = self.histogram_mask.get_value(*tuple(arrays))
         colors = get_color(types, self.colors)
         filtered_image_array = (self.original_array * 0.5 + colors * 0.5).astype('uint8')
         self.filtered_image = Image.fromarray(filtered_image_array, mode='RGB')
