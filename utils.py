@@ -53,6 +53,7 @@ SATELLITE_CHANNELS = {
         '03': 'green',
         '04': 'red',
         '08': 'nir',
+        '11': 'swir1',
         '12': 'swir2'
     }
 }
