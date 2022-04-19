@@ -443,6 +443,9 @@ class MapImage:
         ds = gdal.Open(img_path)
         if ds is None:
             return
+        for (x, y, channels) in list(self._buffer_for_get_bands.keys()):
+            if b in channels:
+                self._buffer_for_get_bands.pop((x, y, channels))
         band = ds.GetRasterBand(1)
         if b == '_map_mask_':
             self.map_mask = band.ReadAsArray().astype(float)
@@ -454,7 +457,6 @@ class MapImage:
         img_prefix = self._get_img_name(img_path)
         self.img_name = img_prefix.split('/')[-1]
         self.bands = dict()
-        self._buffer_for_get_bands = {}
         if img_prefix != '':
             for n, c in self.chan_dict.items():
                 self.load_band(c, f'{img_prefix}_{c}_{n}.tif')
