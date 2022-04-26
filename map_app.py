@@ -444,7 +444,7 @@ class MapImage:
         if ds is None:
             return
         for (x, y, channels) in list(self._buffer_for_get_bands.keys()):
-            if b in channels:
+            if self.chan_dict_rev[b] in channels:
                 self._buffer_for_get_bands.pop((x, y, channels))
         band = ds.GetRasterBand(1)
         if b == '_map_mask_':
