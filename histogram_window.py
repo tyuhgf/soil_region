@@ -9,8 +9,7 @@ from tkinter.messagebox import showwarning
 import numpy as np
 from PIL import Image, ImageTk
 
-from utils import Mask, plot_hist2d, AugmentedLabelFrame, TabPolygonImage, keycode2char, geometry_histogram, \
-    SATELLITE_CHANNELS
+from utils import Mask, plot_hist2d, AugmentedLabelFrame, TabPolygonImage, keycode2char, geometry_histogram
 
 from segcanvas.wrappers import FocusLabelFrame
 
@@ -253,11 +252,11 @@ class HistogramWindow:
         v = y_min + y * y_step
 
         channels = self.map_window.channels_histogram
-        channels = [SATELLITE_CHANNELS[self.map_window.map_image.satellite_type][c] for c in channels]
+        channel_names = [self.map_window.map_image.chan_dict.get(c, f'f{c}') for c in channels]
 
         u = format(u, '.6f')
         v = format(v, '.6f')
-        self.status_pos_real['text'] = f'values: {channels[0]}={u} {channels[1]}={v}'
+        self.status_pos_real['text'] = f'values: {channel_names[0]}={u} {channel_names[1]}={v}'
         self.status_pos_pix['text'] = f'position: x={x} y={y}'
 
 

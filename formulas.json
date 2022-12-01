@@ -1,0 +1,6 @@
+{
+    "formulas":
+    {
+        "30": "(red - nir) / (red + nir + blue)"
+    }
+}

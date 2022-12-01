@@ -1,3 +1,4 @@
+import json
 import tkinter as tk
 from functools import partial
 from tkinter import ttk
@@ -41,7 +42,7 @@ class MapWindow:
         self.root.geometry("%dx%d%+d%+d" % geometry_map)
 
         self.channels_img = ['07', '04', '02']
-        self.channels_histogram = ['03', '04']
+        self.channels_histogram = None
         self.steps = [300, 300]
         self.range = None
         self.n_regions = 5
@@ -435,7 +436,9 @@ class MapImage:
         self.filtered_image = None
         self.meta_dict = dict()
         self.img_name = None
-        self._buffer_for_get_bands = {}
+        self._buffer_for_get_bands = dict()
+
+        self.channel_formulas = dict()
 
     def load_band(self, b, img_path):
         if not os.path.isfile(img_path):
@@ -450,6 +453,7 @@ class MapImage:
                 self._buffer_for_get_bands.pop((x, y, channels))
         band = ds.GetRasterBand(1)
         if b == '_map_mask_':
+            # todo assert same projection and geotranform
             self.map_mask = band.ReadAsArray().astype(float)
         else:
             self.bands[b] = band.ReadAsArray().astype(float)
@@ -463,12 +467,30 @@ class MapImage:
             for n, c in self.chan_dict.items():
                 self.load_band(c, f'{img_prefix}_{c}_{n}.tif')
 
+    def load_formulas(self, f='formulas.json'):
+        formulas = json.load(open(f))['formulas']
+        for v in formulas.values():
+            if '__' in v or '[' in v or '{' in v or '\'' in v or '"' in v or 'import' in v:
+                logger.error('Formula not safe to eval')
+                return
+        self.channel_formulas = formulas
+
+    def get_band(self, channel):
+        if channel in self.chan_dict:
+            return self.bands[self.chan_dict[channel]]
+        elif channel == '_map_mask_':
+            return self.map_mask
+        else:
+            logger.info('Channel not found, applying formula')
+            self.load_formulas()
+            locals_ = {'np': np}
+            locals_.update(self.bands)
+            res = eval(self.channel_formulas[channel], locals_)
+            return res
+
     def get_bands(self, channels, downsample=1, shape=None):
         """downsample!=False will make all bands having shape of smallest // downsample."""
-        if channels == ['_map_mask_']:
-            arrays = [self.map_mask]
-        else:
-            arrays = [self.bands[self.chan_dict[c]].copy() for c in channels]
+        arrays = [self.get_band(c).copy() for c in channels]
 
         if not shape:
             if not downsample:
@@ -512,7 +534,8 @@ class MapImage:
 
             arrays[i] = a
 
-        self._buffer_for_get_bands[(x, y, tuple(channels))] = copy_list(arrays)
+        if set(channels) <= self.chan_dict.keys():
+            self._buffer_for_get_bands[(x, y, tuple(channels))] = copy_list(arrays)
         return arrays
 
     def create_original_img(self, b, r=0):

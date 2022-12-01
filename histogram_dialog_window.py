@@ -17,12 +17,14 @@ class HistogramDialogWindow:
         self.root.title('Preview')
         self.root.geometry("%dx%d%+d%+d" % (1200, 900, 500, 100))
 
-        self.map_window.channels_histogram = [self.map_image.chan_dict_rev[c] for c in ['red', 'nir']]
+        if not self.map_window.channels_histogram:
+            self.map_window.channels_histogram = [self.map_image.chan_dict_rev[c] for c in ['red', 'nir']]
         self.steps = self.map_window.steps
 
         self.graph_x_img = None
         self.graph_y_img = None
 
+        # todo: if channel unknown, window will crash
         self._add_top_menu()
         self._calc_ranges()
         self._add_left_menu()
@@ -120,13 +122,15 @@ class HistogramDialogWindow:
         if keycode2char(ev.keycode) == 'enter':
             self.open_histogram_window(None)
 
-    def _reload_hist(self, _ev=None):
+    def _reload_hist(self, _ev=None, update_xy_ranges=True):
         for i in range(2):
-            self.x_range[i] = string_to_value(self.xrange_entries[i].get(), 'float') or self.x_range[i]
+            if update_xy_ranges:
+                self.x_range[i] = string_to_value(self.xrange_entries[i].get(), 'float') or self.x_range[i]
             self.xrange_entries[i].delete(0, 'end')
             self.xrange_entries[i].insert(0, self.x_range[i])
         for i in range(2):
-            self.y_range[i] = string_to_value(self.yrange_entries[i].get(), 'float') or self.y_range[i]
+            if update_xy_ranges:
+                self.y_range[i] = string_to_value(self.yrange_entries[i].get(), 'float') or self.y_range[i]
             self.yrange_entries[i].delete(0, 'end')
             self.yrange_entries[i].insert(0, self.y_range[i])
         for i in range(2):
@@ -155,7 +159,7 @@ class HistogramDialogWindow:
             self.ch_entries[i].insert(0, int(self.map_window.channels_histogram[i]))
 
         self._calc_ranges()
-        self._reload_hist()
+        self._reload_hist(update_xy_ranges=False)
 
         self.graph_x_img = PhotoImage(self.graphs[0], master=self.left_menu)
         self.graph_y_img = PhotoImage(self.graphs[1], master=self.left_menu)
