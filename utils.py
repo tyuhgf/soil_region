@@ -5,6 +5,7 @@ import numpy as np
 from tkinter import ttk
 from PIL import Image
 import matplotlib.pyplot as plt
+from matplotlib.transforms import Bbox
 from tempfile import gettempdir
 
 from matplotlib.colors import LinearSegmentedColormap, hsv_to_rgb
@@ -135,7 +136,7 @@ def plot_hist(x):
     plt.figure(figsize=(380 / dpi, 300 / dpi), dpi=dpi)
     plt.hist(q, bins=256)
     fn = os.path.join(TMP_FOLDER, 'hist.png')
-    plt.savefig(fn, figsize=(380 / dpi, 300 / dpi), dpi=dpi)
+    plt.savefig(fn, bbox_inches=Bbox([[0, 0], [380 / dpi, 300 / dpi]]), dpi=dpi)
     plt.close('all')
     return Image.open(fn).convert('RGB')
 
@@ -317,45 +318,34 @@ class TabPolygonImage(CanvasImage):
             return res[0], self.shape[1] - res[1]
         return None
 
+    def _polygon_coords_to_canvas_coords(self, x, y):
+        box_image = self.canvas.coords(self.container)
+
+        y = self.shape[1] - y
+
+        x *= self.real_scale[0]
+        y *= self.real_scale[1]
+
+        x += box_image[0]
+        y += box_image[1]
+        return x, y
+
     def _show_image(self):
         super()._show_image()
         self.canvas.delete('polygons')
 
-        box_image = self.canvas.coords(self.container)
         for p in self.polygons[self.tab]:
             for i in range(len(p)):
-                x, y = tuple(p[i])
-                y = self.shape[1] - y
+                x, y = self._polygon_coords_to_canvas_coords(*p[i])
 
-                x *= self.real_scale[0]
-                y *= self.real_scale[1]
-
-                x += box_image[0]
-                y += box_image[1]
-
-                x_, y_ = tuple(p[(i + 1) % len(p)])
-                y_ = self.shape[1] - y_
-
-                x_ *= self.real_scale[0]
-                y_ *= self.real_scale[1]
-
-                x_ += box_image[0]
-                y_ += box_image[1]
+                x_, y_ = self._polygon_coords_to_canvas_coords(*p[(i + 1) % len(p)])
                 self.canvas.create_line(x, y, x_, y_, fill="#FADADD", width=3, tags='polygons')
                 self.canvas.create_oval((x + x_) // 2 - 3, (y + y_) // 2 - 3, (x + x_) // 2 + 3, (y + y_) // 2 + 3,
                                         outline="#EFDECD", width=3, tags='polygons')
 
         for p in self.polygons[self.tab]:
             for i in range(len(p)):
-                x, y = tuple(p[i])
-                y = self.shape[1] - y
-
-                x *= self.real_scale[0]
-                y *= self.real_scale[1]
-
-                x += box_image[0]
-                y += box_image[1]
-
+                x, y = self._polygon_coords_to_canvas_coords(*p[i])
                 self.canvas.create_oval(x - 5, y - 5, x + 5, y + 5, outline="#EFDECD", width=3, tags='polygons')
 
     def patch_image(self, image):

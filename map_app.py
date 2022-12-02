@@ -8,9 +8,9 @@ from tkinter import messagebox
 import os.path
 import logging
 
+from osgeo import gdal
 import numpy as np
 from PIL import Image
-import gdal
 from scipy.interpolate import interp2d
 
 from histogram_dialog_window import HistogramDialogWindow
@@ -105,7 +105,7 @@ class MapWindow:
         for i, e in enumerate(self.ch_entries):
             e.place(x=160+30*i, y=10, width=25)
             e.delete(0, -1)
-            e.insert(0, int(self.channels_img[i]))
+            e.insert(0, self.channels_img[i].lstrip('0'))
             e.bind('<Return>', self.reload_channels)
 
         self.upd_histogram_btn.configure(state='disabled')
@@ -186,7 +186,7 @@ class MapWindow:
             self.mask_threshold_entry = tk.Entry(self.top_menu, textvariable=self.mask_threshold_stringvar)
             self.mask_threshold_entry.place(x=-360, y=10, relx=1, width=50)
             self.mask_threshold_entry.delete(0, -1)
-            self.mask_threshold_entry.insert(0, 0)
+            self.mask_threshold_entry.insert(0, '0')
             self.mask_threshold_entry.bind('<Return>', self.update_mask_threshold)
 
             self.update_mask_threshold(value=(l+r)/2)
@@ -268,7 +268,7 @@ class MapWindow:
             else:
                 self.channels_img[i] = string_to_value(self.ch_stringvars[i].get()) or self.channels_img[i]
             self.ch_entries[i].delete(0, 'end')
-            self.ch_entries[i].insert(0, int(self.channels_img[i]))
+            self.ch_entries[i].insert(0, self.channels_img[i].lstrip('0'))
         if self.map_image.original_image is not None:
             self.map_image.create_original_img(self.channels_img, self.slider.get())
             self.canvas_image.reload_image(self.map_image.original_image, True)
@@ -280,12 +280,12 @@ class MapWindow:
         if value is not None:
             self.mask_threshold_slider.set(value)
             self.mask_threshold_entry.delete(0, 'end')
-            self.mask_threshold_entry.insert(0, value)
+            self.mask_threshold_entry.insert(0, str(value))
         self._update_histogram_window(upd_histogram_btn_state='keep')
         self.redraw()
 
     def _load_file(self, _ev):
-        img_path = tk_filedialog.Open(self.root, filetypes=[('*.tif files', '*.tif')]).show()
+        img_path = tk_filedialog.Open(self.root, initialdir='/', filetypes=[('*.tif files', '*.tif')]).show()
         if isinstance(img_path, str) and self.map_image.validate_img_path(img_path):
             if hasattr(self, 'histogram_window'):
                 self.histogram_window.quit(None)
@@ -312,20 +312,18 @@ class MapWindow:
         if not fn.endswith('.tif'):
             fn += '.tif'
 
-        band = None  # band to take GeoTransform
-        for b in ['blue', 'green', 'red', 'nir', 'swir1', 'swir2']:
-            if b in self.map_image.bands:
-                band = b
-                break
+        band = list({'blue', 'green', 'red', 'nir', 'swir1', 'swir2'} & self.map_image.bands.keys())[0]
+        gt = self.map_image.meta_dict[band]['geotransform']
+        proj = self.map_image.meta_dict[band]['projection']
+        shape = self.map_image.bands[band].shape
 
-        arrays = self.map_image.get_bands(self.map_image.histogram_mask.channels,
-                                          shape=self.map_image.bands[band].shape)
+        arrays = self.map_image.get_bands(self.map_image.histogram_mask.channels, shape=shape)
         types = self.map_image.histogram_mask.get_value(*tuple(arrays))
 
         driver = gdal.GetDriverByName("GTiff")
         outdata = driver.Create(fn, types.shape[1], types.shape[0], 1, gdal.GDT_UInt16)
-        outdata.SetGeoTransform(self.map_image.meta_dict[band]['geotransform'])
-        outdata.SetProjection(self.map_image.meta_dict[band]['projection'])
+        outdata.SetGeoTransform(gt)
+        outdata.SetProjection(proj)
         outdata.GetRasterBand(1).WriteArray(types)
         outdata.FlushCache()  # saves to disk
 
